@@ -136,32 +136,49 @@
             }, []);
 
             // --- WIFI LOGIC ---
-            const connectWifi = () => {
-                if (wifiConnected) return;
-                try {
-                    const ws = new WebSocket(`ws://${espIP}:81`);
-                    ws.onopen = () => { 
-                        console.log("WiFi Connected!"); 
-                        setWifiConnected(true); 
-                        wifiRef.current.ws = ws; 
-                    };
-                    ws.onmessage = (event) => {
-                        const val = parseFloat(event.data);
-                        if (!isNaN(val)) wifiRef.current.tilt = val;
-                    };
-                    ws.onclose = () => { console.log("WiFi Disconnected"); setWifiConnected(false); };
-                    ws.onerror = (e) => { 
-                        console.error("WiFi Error", e); 
-                        alert("Connection Failed. Check IP or use Phone Hotspot."); 
-                    };
-                } catch (e) { console.error(e); }
-            };
+            let bleDevice = null;
+let bleChar = null;
 
-            const sendVibration = () => {
-                if (wifiRef.current.ws && wifiRef.current.ws.readyState === WebSocket.OPEN) {
-                    wifiRef.current.ws.send('1');
-                }
-            };
+const connectWifi = async () => {
+    try {
+        bleDevice = await navigator.bluetooth.requestDevice({
+            filters: [{ namePrefix: "BlockyRacer" }],
+            optionalServices: ["19b10000-e8f2-537e-4f6c-d104768a1214"]
+        });
+
+        const server = await bleDevice.gatt.connect();
+        const service = await server.getPrimaryService(
+            "19b10000-e8f2-537e-4f6c-d104768a1214"
+        );
+
+        bleChar = await service.getCharacteristic(
+            "19b10001-e8f2-537e-4f6c-d104768a1214"
+        );
+
+        await bleChar.startNotifications();
+
+        bleChar.addEventListener("characteristicvaluechanged", (event) => {
+            const text = new TextDecoder().decode(event.target.value);
+            const val = parseFloat(text);
+            if (!isNaN(val)) {
+                wifiRef.current.tilt = val;
+            }
+        });
+
+        setWifiConnected(true);
+        console.log("Bluetooth Connected");
+    } catch (e) {
+        console.error(e);
+        alert("Bluetooth connection failed");
+    }
+};
+
+
+            const sendVibration = async () => {
+    if (!bleChar) return;
+    const data = new TextEncoder().encode("1");
+    await bleChar.writeValue(data);
+};
 
             // --- MENU HANDLERS ---
             const toggleMenu = () => {
@@ -653,3 +670,4 @@
     </script>
 </body>
 </html>
+
