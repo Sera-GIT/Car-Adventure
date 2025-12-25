@@ -71,26 +71,37 @@
             }, []);
 
             // --- BLUETOOTH HANDLERS ---
-            const connectBluetooth = async () => {
-                try {
-                    console.log("Requesting Bluetooth Device...");
-                    const device = await navigator.bluetooth.requestDevice({
-                        acceptAllDevices: true, 
-                        optionalServices: [SERVICE_UUID]
-                    });
-
-                    device.addEventListener('gattserverdisconnected', onDisconnected);
-                    const server = await device.gatt.connect();
-                    const service = await server.getPrimaryService(SERVICE_UUID);
-                    
-                    // Setup Sensor Reader
-                    const sensorChar = await service.getCharacteristic(SENSOR_CHAR_UUID);
-                    await sensorChar.startNotifications();
-                    sensorChar.addEventListener('characteristicvaluechanged', (event) => {
-                        const decoder = new TextDecoder('utf-8');
-                        const val = parseFloat(decoder.decode(event.target.value));
-                        if (!isNaN(val)) btRef.current.tilt = val;
-                    });
+           const connectBluetooth = async () => {
+            try {
+                console.log("Requesting Bluetooth Device...");
+                const device = await navigator.bluetooth.requestDevice({
+                    acceptAllDevices: true, 
+                    optionalServices: [SERVICE_UUID]
+                });
+        
+                device.addEventListener('gattserverdisconnected', onDisconnected);
+                
+                console.log("Connecting to GATT Server...");
+                const server = await device.gatt.connect();
+                
+                console.log("Getting Service...");
+                const service = await server.getPrimaryService(SERVICE_UUID);
+                
+                // --- THE FIX: WAKE UP THE ESP32 ---
+                console.log("Getting Sensor Characteristic...");
+                const sensorChar = await service.getCharacteristic(SENSOR_CHAR_UUID);
+                
+                // This line is CRITICAL. It tells the ESP32 "I am listening!"
+                // Without this, the ESP32 often ignores the connection.
+                await sensorChar.startNotifications();
+                
+                sensorChar.addEventListener('characteristicvaluechanged', (event) => {
+                    const decoder = new TextDecoder('utf-8');
+                    const rawString = decoder.decode(event.target.value);
+                    // console.log("Data:", rawString); // Uncomment to debug
+                    const val = parseFloat(rawString);
+                    if (!isNaN(val)) btRef.current.tilt = val;
+                });
 
                     // Setup Vibe Writer
                     const vibeChar = await service.getCharacteristic(VIBE_CHAR_UUID);
@@ -337,3 +348,4 @@
 </body>
 
 </html>
+
