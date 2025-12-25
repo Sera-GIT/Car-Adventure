@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blocky Racer: Bluetooth Edition</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: Arial, sans-serif; }
+        #loader { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #000; color: white; display: flex; justify-content: center; align-items: center; z-index: 999; transition: opacity 0.5s; }
+        #hud { position: absolute; top: 20px; left: 20px; color: white; text-shadow: 2px 2px 4px #000; z-index: 10; pointer-events: none; }
+        #menuBtn { position: absolute; top: 20px; right: 20px; background: rgba(0,0,0,0.6); color: white; border: 2px solid white; padding: 10px 20px; font-size: 18px; font-weight: bold; cursor: pointer; z-index: 20; border-radius: 5px; pointer-events: auto; }
+        #sideMenu { position: absolute; top: 0; right: -350px; width: 300px; height: 100%; background: rgba(0,0,0,0.95); color: white; z-index: 100; padding: 30px; box-sizing: border-box; transition: right 0.3s ease-out; display: flex; flex-direction: column; border-left: 2px solid #444; }
+        #sideMenu.open { right: 0; }
+        .menu-opt { margin: 10px 0; padding: 15px; background: #333; cursor: pointer; border: 1px solid #555; text-align: center; border-radius: 5px; transition: all 0.2s; }
+        .menu-opt.active { background: #4CAF50; border-color: #81C784; font-weight: bold; }
+        #overlayScreen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 50; color: white; }
+        .big-btn { padding: 20px 60px; font-size: 32px; background: #4CAF50; color: white; border: none; border-radius: 10px; cursor: pointer; margin-top: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+        .bt-btn { padding: 15px 40px; font-size: 20px; background: #2196F3; color: white; border: none; border-radius: 30px; cursor: pointer; margin-top: 20px; display: flex; align-items: center; gap: 10px; }
+        .bt-btn.connected { background: #607D8B; cursor: default; }
+    </style>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+    <div id="loader">Loading Assets...</div>
+    <div id="hud">
+        <div style="font-size: 32px; font-weight: bold;">Score: <span id="scoreVal">0</span></div>
+        <div style="font-size: 32px; font-weight: bold; color: #FFFF00; margin-top: 5px;">High Score: <span id="highVal">0</span></div>
+        <div style="font-size: 18px; color: #000000; margin-top: 10px; font-weight: bold; text-shadow: 1px 1px 0 #fff;">Difficulty: <span id="diffVal">Easy</span></div>
+        <div style="font-size: 14px; color: #AAAAAA;">Time: <span id="timeVal">0</span>s</div>
+    </div>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useEffect, useRef, useState } = React;
+
+        const BlockyCarGame = () => {
+            const mountRef = useRef(null);
+            const [gameStarted, setGameStarted] = useState(false);
+            const [gameOver, setGameOver] = useState(false);
+            const [score, setScore] = useState(0);
+            const [highScore, setHighScore] = useState(0);
+            const [newRecord, setNewRecord] = useState(false);
+            const [menuOpen, setMenuOpen] = useState(false);
+            const [uiDifficulty, setUiDifficulty] = useState('Progressive');
+
+            // --- BLUETOOTH STATE ---
+            const [btConnected, setBtConnected] = useState(false);
+            const btRef = useRef({ 
+                device: null, server: null, sensorChar: null, vibeChar: null, tilt: 0 
+            });
+
+            const gameStateRef = useRef({
+                isGameOver: false, isPaused: false, score: 0,
+                movingTime: 0, totalDistance: 0, gridRows: [], opponents: [], difficulty: 'Progressive'
+            });
+
+            // UUID Constants (Must match Arduino)
+            const SERVICE_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214";
+            const SENSOR_CHAR_UUID = "19b10001-e8f2-537e-4f6c-d104768a1214";
+            const VIBE_CHAR_UUID = "19b10002-e8f2-537e-4f6c-d104768a1214";
+
+            useEffect(() => {
+                const saved = localStorage.getItem('blockyRacerHighScore');
+                if (saved) {
+                    setHighScore(parseInt(saved));
+                    const el = document.getElementById('highVal'); if(el) el.innerText = saved;
+                }
+            }, []);
+
+            // --- BLUETOOTH HANDLERS ---
+            const connectBluetooth = async () => {
+                try {
+                    console.log("Requesting Bluetooth Device...");
+                    const device = await navigator.bluetooth.requestDevice({
+                        filters: [{ name: 'BlockyRacer_Controller' }],
+                        optionalServices: [SERVICE_UUID]
+                    });
+
+                    device.addEventListener('gattserverdisconnected', onDisconnected);
+                    const server = await device.gatt.connect();
+                    const service = await server.getPrimaryService(SERVICE_UUID);
+                    
+                    // Setup Sensor Reader
+                    const sensorChar = await service.getCharacteristic(SENSOR_CHAR_UUID);
+                    await sensorChar.startNotifications();
+                    sensorChar.addEventListener('characteristicvaluechanged', (event) => {
+                        const decoder = new TextDecoder('utf-8');
+                        const val = parseFloat(decoder.decode(event.target.value));
+                        if (!isNaN(val)) btRef.current.tilt = val;
+                    });
+
+                    // Setup Vibe Writer
+                    const vibeChar = await service.getCharacteristic(VIBE_CHAR_UUID);
+
+                    btRef.current = { device, server, sensorChar, vibeChar, tilt: 0 };
+                    setBtConnected(true);
+                    console.log("Bluetooth Connected!");
+                } catch (error) {
+                    console.error("Bluetooth Error:", error);
+                    alert("Bluetooth failed: " + error);
+                }
+            };
+
+            const onDisconnected = () => {
+                console.log("Bluetooth Disconnected");
+                setBtConnected(false);
+            };
+
+            const sendVibration = async () => {
+                if (btRef.current.vibeChar && btConnected) {
+                    try {
+                        const encoder = new TextEncoder('utf-8');
+                        await btRef.current.vibeChar.writeValue(encoder.encode('1'));
+                    } catch(e) { console.error("Vibe Error", e); }
+                }
+            };
+
+            // --- MENU & GAME LOGIC (From v29) ---
+            const toggleMenu = () => {
+                if (gameOver || !gameStarted) return;
+                const newState = !menuOpen;
+                setMenuOpen(newState);
+                gameStateRef.current.isPaused = newState;
+            };
+
+            const changeDifficulty = (mode) => {
+                gameStateRef.current.difficulty = mode;
+                setUiDifficulty(mode);
+            };
+
+            const triggerRestart = () => {
+                setGameOver(false); setScore(0); setNewRecord(false); setMenuOpen(false);
+                const ref = gameStateRef.current;
+                ref.isGameOver = false; ref.isPaused = false; ref.score = 0; ref.movingTime = 0; ref.totalDistance = 0;
+                ref.opponents.forEach(o => { if(o.mesh && o.mesh.parent) o.mesh.parent.remove(o.mesh); });
+                ref.opponents = [];
+                for (let i = 0; i < ref.gridRows.length; i++) {
+                    ref.gridRows[i].z = -350 + (i * 30);
+                    updateRowVisuals(ref.gridRows[i], true); 
+                }
+            };
+
+            // ... (Visual helpers identical to v29: updateRowVisuals, setBuildingType) ...
+            const updateRowVisuals = (rowObj, isRural) => {
+                rowObj.treeOuterL.visible = isRural; rowObj.treeOuterR.visible = isRural;
+                rowObj.treeInnerL.visible = false; rowObj.treeInnerR.visible = false;
+                rowObj.buildL.visible = false; rowObj.buildR.visible = false;
+                if (isRural) {
+                    rowObj.treeInnerL.visible = Math.random() > 0.5; rowObj.treeInnerR.visible = Math.random() > 0.5;
+                    if (Math.random() > 0.8) { setBuildingType(rowObj.buildL, 'house'); rowObj.buildL.visible = true; rowObj.treeInnerL.visible = false; }
+                    if (Math.random() > 0.8) { setBuildingType(rowObj.buildR, 'house'); rowObj.buildR.visible = true; rowObj.treeInnerR.visible = false; }
+                } else {
+                    setBuildingType(rowObj.buildL, 'random'); rowObj.buildL.visible = true;
+                    setBuildingType(rowObj.buildR, 'random'); rowObj.buildR.visible = true;
+                }
+            };
+            const setBuildingType = (group, type) => {
+                group.children.forEach(c => c.visible = false);
+                let idx = 0;
+                if (type === 'house') idx = 0;
+                else { const r = Math.random(); if (r < 0.25) idx = 0; else if (r < 0.5) idx = 1; else if (r < 0.75) idx = 2; else idx = 3; }
+                group.children[idx].visible = true;
+            };
+
+            useEffect(() => {
+                if (!mountRef.current) return;
+                const scene = new THREE.Scene();
+                scene.background = new THREE.Color(0x87CEEB);
+                scene.fog = new THREE.Fog(0xaaccff, 10, 280); 
+                const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+                const renderer = new THREE.WebGLRenderer({ antialias: true });
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.shadowMap.enabled = true;
+                renderer.shadowMap.type = THREE.PCFSoftShadowMap; 
+                mountRef.current.appendChild(renderer.domElement);
+
+                new THREE.TextureLoader().load('https://images.unsplash.com/photo-1513002749550-c59d786b8e6c?q=80&w=2560&auto=format&fit=crop', 
+                    (t) => { scene.background = t; const l = document.getElementById('loader'); if(l) { l.style.opacity = 0; setTimeout(() => l.style.display = 'none', 500); } });
+
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); scene.add(ambientLight);
+                const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+                dirLight.position.set(100, 150, 50); dirLight.castShadow = true;
+                dirLight.shadow.mapSize.width = 4096; dirLight.shadow.mapSize.height = 4096;
+                dirLight.shadow.camera.left = -200; dirLight.shadow.camera.right = 200;
+                dirLight.shadow.camera.top = 200; dirLight.shadow.camera.bottom = -200;
+                scene.add(dirLight);
+
+                // ... (Asset Creators: createMultiBuilding, createTree, createCar - SAME AS V29) ...
+                const createMultiBuilding=()=>{const g=new THREE.Group();const c=[0xE6E6FA,0xF5DEB3,0xFFB6C1,0x87CEFA,0x98FB98,0xD3D3D3][Math.floor(Math.random()*6)];const wm=new THREE.MeshLambertMaterial({color:0x333333});const dm=new THREE.MeshLambertMaterial({color:0x4A3627});const rm=new THREE.MeshLambertMaterial({color:0x8B4513});const h=new THREE.Group();const hw=new THREE.Mesh(new THREE.BoxGeometry(12,10,12),new THREE.MeshLambertMaterial({color:c}));hw.position.y=5;hw.castShadow=true;h.add(hw);const hr=new THREE.Mesh(new THREE.ConeGeometry(9,6,4),rm);hr.position.y=13;hr.rotation.y=Math.PI/4;h.add(hr);h.add(new THREE.Mesh(new THREE.BoxGeometry(3,6,0.5),dm).translateY(3).translateZ(6));h.add(new THREE.Mesh(new THREE.BoxGeometry(2.5,2.5,0.5),wm).translateY(6).translateX(-3.5).translateZ(6));h.add(new THREE.Mesh(new THREE.BoxGeometry(2.5,2.5,0.5),wm).translateY(6).translateX(3.5).translateZ(6));h.add(new THREE.Mesh(new THREE.BoxGeometry(2,4,2),new THREE.MeshLambertMaterial({color:0x555555})).translateY(13).translateX(3).translateZ(-3));g.add(h);const s=new THREE.Group();const sw=new THREE.Mesh(new THREE.BoxGeometry(14,45,14),new THREE.MeshLambertMaterial({color:0xaaaaaa}));sw.position.y=22.5;sw.castShadow=true;s.add(sw);for(let i=0;i<6;i++){const w=new THREE.Group();const wn=new THREE.Mesh(new THREE.BoxGeometry(3,4,0.5),wm);w.add(wn.clone().translateX(-4));w.add(wn.clone().translateX(4));w.position.set(0,5+i*6,7);s.add(w);}s.visible=false;g.add(s);const f=new THREE.Group();const fw=new THREE.Mesh(new THREE.BoxGeometry(18,12,18),new THREE.MeshLambertMaterial({color:0xCD5C5C}));fw.position.y=6;fw.castShadow=true;f.add(fw);f.add(new THREE.Mesh(new THREE.CylinderGeometry(1.5,1.5,10,12),new THREE.MeshLambertMaterial({color:0x333333})).translateY(15).translateX(-5).translateZ(-5));f.add(new THREE.Mesh(new THREE.CylinderGeometry(1.5,1.5,10,12),new THREE.MeshLambertMaterial({color:0x333333})).translateY(15).translateX(5));f.visible=false;g.add(f);const gl=new THREE.Group();const gw=new THREE.Mesh(new THREE.BoxGeometry(15,30,15),new THREE.MeshLambertMaterial({color:0x00CED1,transparent:true,opacity:0.8}));gw.position.y=15;gw.castShadow=true;gl.add(gw);for(let i=1;i<5;i++)gl.add(new THREE.Mesh(new THREE.BoxGeometry(14.5,0.5,14.5),new THREE.MeshLambertMaterial({color:0xffffff})).translateY(i*6));gl.visible=false;g.add(gl);return g;};
+                const createTree=()=>{const g=new THREE.Group();const t=Math.random();if(t<0.3){g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.7,2.5,6),new THREE.MeshLambertMaterial({color:0x3d2817})).translateY(1.25));const l=new THREE.Mesh(new THREE.ConeGeometry(3,7,8),new THREE.MeshLambertMaterial({color:0x1a472a}));l.position.y=5;l.castShadow=true;g.add(l);}else if(t<0.6){g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.6,3.5,6),new THREE.MeshLambertMaterial({color:0x5C4033})).translateY(1.75));const c=[0xFFB7C5,0xFF69B4,0xFFA500,0xFFFF00][Math.floor(Math.random()*4)];const l=new THREE.Mesh(new THREE.DodecahedronGeometry(2.8),new THREE.MeshLambertMaterial({color:c}));l.position.y=4.5;l.castShadow=true;g.add(l);}else{g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.6,0.7,3,6),new THREE.MeshLambertMaterial({color:0x8B4513})).translateY(1.5));const l=new THREE.Mesh(new THREE.SphereGeometry(3,7,7),new THREE.MeshLambertMaterial({color:0x228B22}));l.position.y=4;l.castShadow=true;g.add(l);}g.scale.set(1.3,1.3,1.3);return g;};
+                const createCar=(t,c)=>{const g=new THREE.Group();const p=new THREE.MeshLambertMaterial({color:c});const gl=new THREE.MeshLambertMaterial({color:0x222222});const r=new THREE.MeshLambertMaterial({color:0x111111});const m=new THREE.MeshLambertMaterial({color:0x888888});const lr=new THREE.MeshLambertMaterial({color:0xff0000});const ly=new THREE.MeshLambertMaterial({color:0xffff00});const mb=(w,h,d,mt,x,y,z,rx=0)=>{const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mt);o.position.set(x,y,z);if(rx)o.rotation.x=rx;o.castShadow=true;g.add(o);};const mr=(rad,len,mt,x,y,z)=>{const o=new THREE.Mesh(new THREE.CylinderGeometry(rad,rad,len,16,1,false,0,Math.PI),mt);o.rotation.set(Math.PI/2,0,Math.PI/2);o.position.set(x,y,z);o.castShadow=true;g.add(o);};const ml=(mt,x,y,z)=>{const o=new THREE.Mesh(new THREE.SphereGeometry(0.2,8,8),mt);o.position.set(x,y,z);g.add(o);};const by=0.8;const wg=new THREE.CylinderGeometry(0.6,0.6,0.5,16);[[-1.2,1.2],[1.2,1.2],[-1.2,-1.2],[1.2,-1.2]].forEach(p=>{const w=new THREE.Mesh(wg,r);w.rotation.z=Math.PI/2;w.position.set(p[0],0.6,p[1]);w.castShadow=true;g.add(w);});if(t==='sport'){mb(2.4,0.8,4.2,p,0,by,0);mr(1.1,2.2,p,0,by+0.4,-0.3);mb(2.0,0.1,1.0,gl,0,by+0.65,0.6,-Math.PI/6);mb(2.4,0.2,0.6,p,0,by+0.7,-1.8);ml(ly,-0.8,by,2.2);ml(ly,0.8,by,2.2);ml(lr,-0.8,by+0.1,-2.2);ml(lr,0.8,by+0.1,-2.2);}else if(t==='ambulance'){mb(2.4,1.2,1.5,p,0,by+0.2,1.7);mr(1.2,1.5,p,0,by+0.8,1.7);mb(2.1,0.6,0.1,gl,0,by+0.9,2.35,-Math.PI/12);mb(2.5,2.5,3.2,p,0,by+0.85,-0.7);const wm=new THREE.MeshLambertMaterial({color:0xffffff});mb(0.5,1.4,0.1,wm,0,by+0.85,-2.35);mb(1.4,0.5,0.1,wm,0,by+0.85,-2.35);ml(ly,-0.9,by,2.4);ml(ly,0.9,by,2.4);}else{const co=t==='police'?new THREE.MeshLambertMaterial({color:0x111111}):p;mb(2.4,1.0,4.0,co,0,by,0);mr(1.2,2.5,co,0,by+0.5,-0.2);mb(2.1,0.5,0.8,gl,0,by+0.6,0.6,-Math.PI/8);ml(ly,-0.8,by,2.1);ml(ly,0.8,by,2.1);if(t==='police'){const b=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.15,0.25),m);b.position.set(0,by+1.75,-0.2);b.add(new THREE.Mesh(new THREE.SphereGeometry(0.2),lr).translatex(-0.4));b.add(new THREE.Mesh(new THREE.SphereGeometry(0.2),new THREE.MeshLambertMaterial({color:0x0000ff})).translatex(0.4));g.add(b);}}g.scale.set(1.4,1.4,1.4);return g;};
+
+                const playerCar = createCar('sport', 0xFF0055); scene.add(playerCar);
+                const road = new THREE.Mesh(new THREE.PlaneGeometry(30, 1000), new THREE.MeshLambertMaterial({ color: 0x444444 }));
+                road.rotation.x = -Math.PI / 2; road.receiveShadow = true; scene.add(road);
+                const grassL = new THREE.Mesh(new THREE.BoxGeometry(250, 1, 1000), new THREE.MeshLambertMaterial({ color: 0x2d5a27 })); grassL.position.set(-140, -0.6, 0); scene.add(grassL);
+                const grassR = new THREE.Mesh(new THREE.BoxGeometry(250, 1, 1000), new THREE.MeshLambertMaterial({ color: 0x2d5a27 })); grassR.position.set(140, -0.6, 0); scene.add(grassR);
+                const markings = new THREE.Group(); for(let i=-20; i<80; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.1, 4), new THREE.MeshBasicMaterial({ color: 0xFFFFFF })); m.position.set(-5, 0.05, i*10); markings.add(m.clone()); m.position.set(5, 0.05, i*10); markings.add(m); } scene.add(markings);
+
+                // --- GENERATE GRID ---
+                const GRID_STEP = 30; const NUM_ROWS = 40; const START_Z = -350;
+                for (let i = 0; i < NUM_ROWS; i++) {
+                    const z = START_Z + (i * GRID_STEP);
+                    const tL = createTree(); tL.position.set(-20, 0, 0); const tR = createTree(); tR.position.set(20, 0, 0);
+                    const tOL = createTree(); tOL.position.set(-55, 0, 0); const tOR = createTree(); tOR.position.set(55, 0, 0);
+                    const bL = createMultiBuilding(); bL.position.set(-35, 0, 0); const bR = createMultiBuilding(); bR.position.set(35, 0, 0);
+                    const rowG = new THREE.Group(); rowG.position.z = z; rowG.add(tL, tR, tOL, tOR, bL, bR); scene.add(rowG);
+                    const rowObj = { mesh: rowG, z: z, treeInnerL: tL, treeInnerR: tR, treeOuterL: tOL, treeOuterR: tOR, buildL: bL, buildR: bR };
+                    updateRowVisuals(rowObj, true); gameStateRef.current.gridRows.push(rowObj);
+                }
+
+                // --- INPUTS ---
+                const keys = {}; const onKey = (e) => keys[e.key] = e.type === 'keydown';
+                window.addEventListener('keydown', onKey); window.addEventListener('keyup', onKey);
+                camera.position.set(0, 10, 35); let speed = 0; let spawnTimer = 0; let currentRot = 0, currentTilt = 0; const LANES = [-10, 0, 10];
+
+                const animate = () => {
+                    requestAnimationFrame(animate);
+                    if (!gameStateRef.current.gameStarted || gameStateRef.current.isGameOver || gameStateRef.current.isPaused) {
+                        if(gameStateRef.current.gameStarted) renderer.render(scene, camera); return;
+                    }
+
+                    if (speed > 0) { gameStateRef.current.movingTime += 0.016; gameStateRef.current.totalDistance += speed; }
+                    const t = gameStateRef.current.movingTime; const diffMode = gameStateRef.current.difficulty;
+
+                    let laneSwitchProb = 0, spawnRate = 80, displayDiff = 'Easy';
+                    if (diffMode === 'Progressive') {
+                        if (t > 30 && t <= 60) { displayDiff='Medium'; laneSwitchProb=0.005; spawnRate=60; }
+                        else if (t > 60) { displayDiff='Hard'; laneSwitchProb=0.02; spawnRate=55; }
+                    } else {
+                        displayDiff = diffMode;
+                        if (diffMode === 'Medium') { laneSwitchProb=0.005; spawnRate=60; }
+                        else if (diffMode === 'Hard') { laneSwitchProb=0.02; spawnRate=55; }
+                    }
+
+                    const scoreEl = document.getElementById('scoreVal'); const diffEl = document.getElementById('diffVal'); const timeEl = document.getElementById('timeVal');
+                    if(scoreEl) scoreEl.innerText = Math.floor(gameStateRef.current.score);
+                    if(diffEl) diffEl.innerText = displayDiff;
+                    if(timeEl) timeEl.innerText = Math.floor(t);
+
+                    if(keys['w']||keys['ArrowUp']) speed = Math.min(speed+0.025, 0.9); else speed = Math.max(speed-0.01, 0);
+
+                    let tr = 0, tt = 0;
+                    const tilt = btRef.current.tilt;
+                    if((keys['a']||keys['ArrowLeft']||tilt>10) && playerCar.position.x > -13) { playerCar.position.x-=0.4; tr=0.3; tt=-0.15; }
+                    if((keys['d']||keys['ArrowRight']||tilt<-10) && playerCar.position.x < 13) { playerCar.position.x+=0.4; tr=-0.3; tt=0.15; }
+
+                    currentRot += (tr-currentRot)*0.1; currentTilt += (tt-currentTilt)*0.1;
+                    playerCar.rotation.y = currentRot; playerCar.rotation.z = currentTilt;
+                    camera.position.x = playerCar.position.x * 0.6; camera.lookAt(playerCar.position.x * 0.3, 2, -50);
+
+                    if(speed > 0) {
+                        gameStateRef.current.score += 1; markings.position.z = (markings.position.z + speed) % 40;
+                        const isRural = Math.floor(gameStateRef.current.totalDistance / 400) % 2 === 0;
+                        let minZ = 10000; gameStateRef.current.gridRows.forEach(r => minZ = Math.min(minZ, r.z));
+                        gameStateRef.current.gridRows.forEach(row => {
+                            row.z += speed; if (row.z > 80) { row.z = minZ - GRID_STEP; minZ = row.z; updateRowVisuals(row, isRural); }
+                            row.mesh.position.z = row.z;
+                        });
+                    }
+
+                    const trafficSpeed = 0.6 + speed; spawnTimer += trafficSpeed;
+                    if(spawnTimer > spawnRate) { 
+                        spawnTimer = 0; const r = Math.random(); let type = 'sedan'; let col = 0x555555;
+                        if(r<0.2) type='police'; else if(r<0.4) { type='ambulance'; col=0xFF0000; } else if(r<0.6) type='sport'; else col = [0xAA0000, 0x0000AA, 0x228B22, 0xFF8C00, 0x8A2BE2, 0x00FFFF, 0x32CD32][Math.floor(Math.random()*7)];
+                        const c = createCar(type, col); c.position.set(LANES[Math.floor(Math.random()*3)], 0, -250); c.rotation.y = Math.PI;
+                        scene.add(c); gameStateRef.current.opponents.push({ mesh: c, laneIdx: Math.floor(Math.random()*3) });
+                    }
+                    const ops = gameStateRef.current.opponents;
+                    for (let i = ops.length - 1; i >= 0; i--) {
+                        const opp = ops[i]; opp.mesh.position.z += trafficSpeed;
+                        if (laneSwitchProb > 0 && Math.random() < laneSwitchProb) {
+                             const next = opp.laneIdx + (Math.random()>0.5?1:-1); if(next>=0 && next<=2) opp.laneIdx = next;
+                        }
+                        const targetX = LANES[opp.laneIdx]; const dx = targetX - opp.mesh.position.x;
+                        if(Math.abs(dx) > 0.1) { opp.mesh.position.x += dx * 0.03; opp.mesh.rotation.y = Math.PI + (dx>0?-0.1:0.1); } else opp.mesh.rotation.y = Math.PI;
+                        if (Math.abs(opp.mesh.position.z) < 4.0 && Math.abs(playerCar.position.x - opp.mesh.position.x) < 3.0) {
+                            sendVibration(); setGameOver(true); gameStateRef.current.isGameOver = true; setScore(gameStateRef.current.score);
+                            const h = localStorage.getItem('blockyRacerHighScore') ? parseInt(localStorage.getItem('blockyRacerHighScore')) : 0;
+                            if (gameStateRef.current.score > h) { localStorage.setItem('blockyRacerHighScore', gameStateRef.current.score); setHighScore(gameStateRef.current.score); setNewRecord(true); document.getElementById('highVal').innerText = gameStateRef.current.score; } else setNewRecord(false);
+                        }
+                        if(opp.mesh.position.z > 80) { scene.remove(opp.mesh); ops.splice(i, 1); }
+                    }
+                    renderer.render(scene, camera);
+                };
+                animate();
+
+                const handleResize = () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); };
+                window.addEventListener('resize', handleResize);
+                return () => { window.removeEventListener('resize', handleResize); window.removeEventListener('keydown', onKey); window.removeEventListener('keyup', onKey); if(mountRef.current) mountRef.current.innerHTML = ''; };
+            }, []);
+
+            const onStartGame = () => { setGameStarted(true); gameStateRef.current.gameStarted = true; gameStateRef.current.isPaused = false; };
+            const onPlayAgain = () => { triggerRestart(); };
+
+            return (
+                <div style={{width:'100vw', height:'100vh', position:'relative', overflow:'hidden'}}>
+                    <div ref={mountRef} style={{width:'100%', height:'100%'}} />
+                    {gameStarted && !gameOver && <div id="menuBtn" onClick={toggleMenu}>MENU</div>}
+                    <div id="sideMenu" className={menuOpen ? 'open' : ''}>
+                        <h2 style={{textAlign:'center', borderBottom:'1px solid #666', paddingBottom:'10px'}}>PAUSED</h2>
+                        <div style={{marginBottom:'20px'}}>
+                            <h3 style={{fontSize:'16px', color:'#aaa'}}>Difficulty Mode</h3>
+                            <div className={`menu-opt ${uiDifficulty==='Progressive'?'active':''}`} onClick={()=>changeDifficulty('Progressive')}>Progressive</div>
+                            <div className={`menu-opt ${uiDifficulty==='Easy'?'active':''}`} onClick={()=>changeDifficulty('Easy')}>Fixed: Easy</div>
+                            <div className={`menu-opt ${uiDifficulty==='Medium'?'active':''}`} onClick={()=>changeDifficulty('Medium')}>Fixed: Medium</div>
+                            <div className={`menu-opt ${uiDifficulty==='Hard'?'active':''}`} onClick={()=>changeDifficulty('Hard')}>Fixed: Hard</div>
+                        </div>
+                        <div className="menu-opt" style={{background:'#2196F3', marginTop:'auto'}} onClick={toggleMenu}>RESUME GAME</div>
+                    </div>
+                    {!gameStarted && (
+                        <div id="overlayScreen">
+                            <h1 style={{fontSize:'80px', margin:0, color:'#4CAF50', textShadow:'4px 4px 0 #000'}}>BLOCKY RACER</h1>
+                            <p style={{fontSize:'24px', opacity:0.8}}>Bluetooth Edition</p>
+                            <p style={{marginTop:'20px', fontSize:'18px'}}>High Score: {highScore}</p>
+                            <button className={`bt-btn ${btConnected?'connected':''}`} onClick={!btConnected?connectBluetooth:null}>{btConnected?'✓ PAIRED':'📡 PAIR CONTROLLER'}</button>
+                            <button className="big-btn" onClick={onStartGame}>START ENGINE</button>
+                        </div>
+                    )}
+                    {gameOver && (
+                        <div id="overlayScreen">
+                            <h1 style={{color:'#ff4444', fontSize:'80px', margin:0}}>CRASHED!</h1>
+                            <p style={{fontSize:'32px'}}>Score: {score}</p>
+                            {newRecord && <div style={{background:'#FFD700', color:'black', padding:'10px 20px', borderRadius:'5px', fontWeight:'bold', fontSize:'20px', marginBottom:'20px'}}>🏆 NEW HIGH SCORE! 🏆</div>}
+                            <button className="big-btn" onClick={onPlayAgain}>PLAY AGAIN</button>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<BlockyCarGame />);
+    </script>
+</body>
+</html>
