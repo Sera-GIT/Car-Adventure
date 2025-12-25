@@ -75,7 +75,7 @@
                 try {
                     console.log("Requesting Bluetooth Device...");
                     const device = await navigator.bluetooth.requestDevice({
-                        filters: [{ name: 'BlockyRacer_Controller' }],
+                        acceptAllDevices: true, 
                         optionalServices: [SERVICE_UUID]
                     });
 
@@ -335,4 +335,5 @@
         root.render(<BlockyCarGame />);
     </script>
 </body>
+
 </html>
