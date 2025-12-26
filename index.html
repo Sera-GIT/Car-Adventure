@@ -7,22 +7,17 @@
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; font-family: Arial, sans-serif; }
         
-        /* DEBUG BOX STYLE */
-        #debugBox {
-            position: absolute; top: 10px; left: 10px;
-            background: rgba(0, 50, 255, 0.8); color: white;
-            padding: 10px; border: 2px solid white; font-family: monospace;
-            z-index: 9999; font-size: 16px; pointer-events: none;
-            width: 250px;
-        }
-
         #loader { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #000; color: white; display: flex; justify-content: center; align-items: center; z-index: 999; transition: opacity 0.5s; }
+        
+        /* HUD and MENU Styles */
         #hud { position: absolute; top: 20px; right: 20px; color: white; text-shadow: 2px 2px 4px #000; z-index: 10; pointer-events: none; text-align: right; }
         #menuBtn { position: absolute; bottom: 20px; right: 20px; background: rgba(0,0,0,0.6); color: white; border: 2px solid white; padding: 10px 20px; font-size: 18px; font-weight: bold; cursor: pointer; z-index: 20; border-radius: 5px; pointer-events: auto; }
         #sideMenu { position: absolute; top: 0; right: -350px; width: 300px; height: 100%; background: rgba(0,0,0,0.95); color: white; z-index: 100; padding: 30px; box-sizing: border-box; transition: right 0.3s ease-out; display: flex; flex-direction: column; border-left: 2px solid #444; }
         #sideMenu.open { right: 0; }
         .menu-opt { margin: 10px 0; padding: 15px; background: #333; cursor: pointer; border: 1px solid #555; text-align: center; border-radius: 5px; transition: all 0.2s; }
         .menu-opt.active { background: #4CAF50; border-color: #81C784; font-weight: bold; }
+        
+        /* Overlay */
         #overlayScreen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 50; color: white; }
         .big-btn { padding: 20px 60px; font-size: 32px; background: #4CAF50; color: white; border: none; border-radius: 10px; cursor: pointer; margin-top: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
         .bt-btn { padding: 15px 40px; font-size: 20px; background: #2196F3; color: white; border: none; border-radius: 30px; cursor: pointer; margin-top: 20px; display: flex; align-items: center; gap: 10px; }
@@ -35,21 +30,6 @@
 </head>
 <body>
     <div id="loader">Loading Assets...</div>
-    
-    <div id="debugBox">
-        <b>BLUETOOTH DEBUG</b><br/>
-        Status: <span id="dbStatus">Disconnected</span><br/>
-        Raw Input: <span id="dbRaw">0</span><br/>
-        Game Tilt: <span id="dbTilt">0</span><br/>
-        <small>Needs > 4.0 to turn</small>
-    </div>
-
-    <div id="hud">
-        <div style="font-size: 32px; font-weight: bold;">Score: <span id="scoreVal">0</span></div>
-        <div style="font-size: 32px; font-weight: bold; color: #FFFF00; margin-top: 5px;">High Score: <span id="highVal">0</span></div>
-        <div style="font-size: 18px; color: #000000; margin-top: 10px; font-weight: bold; text-shadow: 1px 1px 0 #fff;">Difficulty: <span id="diffVal">Easy</span></div>
-        <div style="font-size: 14px; color: #AAAAAA;">Time: <span id="timeVal">0</span>s</div>
-    </div>
     <div id="root"></div>
 
     <script type="text/babel">
@@ -57,6 +37,8 @@
 
         const BlockyCarGame = () => {
             const mountRef = useRef(null);
+            
+            // --- STATE ---
             const [gameStarted, setGameStarted] = useState(false);
             const [gameOver, setGameOver] = useState(false);
             const [score, setScore] = useState(0);
@@ -64,12 +46,12 @@
             const [newRecord, setNewRecord] = useState(false);
             const [menuOpen, setMenuOpen] = useState(false);
             const [uiDifficulty, setUiDifficulty] = useState('Progressive');
-
             const [btConnected, setBtConnected] = useState(false);
-            const btRef = useRef({ 
-                device: null, server: null, sensorChar: null, vibeChar: null, tilt: 0 
-            });
+            
+            // --- DEBUG STATE (Forces the box to update) ---
+            const [debugData, setDebugData] = useState({ status: "Waiting...", raw: 0, tilt: 0 });
 
+            const btRef = useRef({ device: null, server: null, sensorChar: null, vibeChar: null, tilt: 0 });
             const gameStateRef = useRef({
                 isGameOver: false, isPaused: false, score: 0,
                 movingTime: 0, totalDistance: 0, gridRows: [], opponents: [], difficulty: 'Progressive'
@@ -79,24 +61,15 @@
             const SENSOR_CHAR_UUID = "19b10001-e8f2-537e-4f6c-d104768a1214";
             const VIBE_CHAR_UUID = "19b10002-e8f2-537e-4f6c-d104768a1214";
 
-            // Helper to update Debug Box
-            const updateDebug = (status, raw, tilt) => {
-                if(status) document.getElementById('dbStatus').innerText = status;
-                if(raw !== null) document.getElementById('dbRaw').innerText = raw.toFixed(2);
-                if(tilt !== null) document.getElementById('dbTilt').innerText = tilt.toFixed(2);
-            };
-
             useEffect(() => {
                 const saved = localStorage.getItem('blockyRacerHighScore');
-                if (saved) {
-                    setHighScore(parseInt(saved));
-                    const el = document.getElementById('highVal'); if(el) el.innerText = saved;
-                }
+                if (saved) setHighScore(parseInt(saved));
             }, []);
 
            const connectBluetooth = async () => {
             try {
-                updateDebug("Searching...", null, null);
+                setDebugData(prev => ({ ...prev, status: "Searching..." }));
+                
                 const device = await navigator.bluetooth.requestDevice({
                     filters: [{ services: [SERVICE_UUID] }]
                 });
@@ -115,12 +88,16 @@
                     let val = parseFloat(rawString);
 
                     if (!isNaN(val)) {
-                        // --- SENSITIVITY FIX ---
-                        // 1. We receive RAW angle (e.g., 20 degrees)
-                        // 2. We divide by 3.0 (Game sees 6.66)
+                        // SENSITIVITY FIX: Divide Raw by 3.0
                         let gameTilt = val / 3.0; 
                         btRef.current.tilt = gameTilt;
-                        updateDebug(null, val, gameTilt);
+                        
+                        // Update the Blue Box
+                        setDebugData({ 
+                            status: "Connected", 
+                            raw: val, 
+                            tilt: gameTilt 
+                        });
                     }
                 });
 
@@ -129,11 +106,11 @@
                 
                 btRef.current = { device, server, sensorChar, vibeChar, tilt: 0 };
                 setBtConnected(true);
-                updateDebug("CONNECTED!", 0, 0);
+                setDebugData(prev => ({ ...prev, status: "Connected!" }));
                 
                 } catch (error) {
                     console.error("Bluetooth Error:", error);
-                    updateDebug("Error: " + error, null, null);
+                    setDebugData(prev => ({ ...prev, status: "Error: " + error }));
                     alert("Connection Failed. Did you reset the ESP32?");
                 }
             };
@@ -141,7 +118,7 @@
             const onDisconnected = () => {
                 setBtConnected(false);
                 btRef.current.vibeChar = null;
-                updateDebug("Disconnected", 0, 0);
+                setDebugData(prev => ({ ...prev, status: "Disconnected" }));
             };
 
             const sendVibration = async () => {
@@ -153,18 +130,9 @@
                 }
             };
 
-            const toggleMenu = () => {
-                if (gameOver || !gameStarted) return;
-                const newState = !menuOpen;
-                setMenuOpen(newState);
-                gameStateRef.current.isPaused = newState;
-            };
-
-            const changeDifficulty = (mode) => {
-                gameStateRef.current.difficulty = mode;
-                setUiDifficulty(mode);
-            };
-
+            // --- GAME LOGIC ---
+            const toggleMenu = () => { if (gameOver || !gameStarted) return; setMenuOpen(!menuOpen); gameStateRef.current.isPaused = !menuOpen; };
+            const changeDifficulty = (mode) => { gameStateRef.current.difficulty = mode; setUiDifficulty(mode); };
             const triggerRestart = () => {
                 setGameOver(false); setScore(0); setNewRecord(false); setMenuOpen(false);
                 const ref = gameStateRef.current;
@@ -177,7 +145,7 @@
                 }
             };
 
-            // ... (Visual helpers same as before) ...
+            // ... (Visual helpers unchanged) ...
             const updateRowVisuals = (rowObj, isRural) => {
                 rowObj.treeOuterL.visible = isRural; rowObj.treeOuterR.visible = isRural;
                 rowObj.treeInnerL.visible = false; rowObj.treeInnerR.visible = false;
@@ -266,20 +234,12 @@
                         if (diffMode === 'Medium') { laneSwitchProb=0.005; spawnRate=60; }
                         else if (diffMode === 'Hard') { laneSwitchProb=0.02; spawnRate=55; }
                     }
-
-                    const scoreEl = document.getElementById('scoreVal'); const diffEl = document.getElementById('diffVal'); const timeEl = document.getElementById('timeVal');
-                    if(scoreEl) scoreEl.innerText = Math.floor(gameStateRef.current.score);
-                    if(diffEl) diffEl.innerText = displayDiff;
-                    if(timeEl) timeEl.innerText = Math.floor(t);
-
                     if(keys['w']||keys['ArrowUp']) speed = Math.min(speed+0.025, 0.9); else speed = Math.max(speed-0.01, 0);
 
                     let tr = 0, tt = 0;
                     const tilt = btRef.current.tilt;
                     
                     // --- CONTROL FIX: LOWERED THRESHOLD TO 4 ---
-                    // Since we divide the raw tilt by 3, we MUST lower the check to 4.
-                    // This creates a "Smooth" low sensitivity.
                     if((keys['a']||keys['ArrowLeft']||tilt>4) && playerCar.position.x > -13) { playerCar.position.x-=0.4; tr=0.3; tt=-0.15; }
                     if((keys['d']||keys['ArrowRight']||tilt<-4) && playerCar.position.x < 13) { playerCar.position.x+=0.4; tr=-0.3; tt=0.15; }
 
@@ -288,7 +248,8 @@
                     camera.position.x = playerCar.position.x * 0.6; camera.lookAt(playerCar.position.x * 0.3, 2, -50);
 
                     if(speed > 0) {
-                        gameStateRef.current.score += 1; markings.position.z = (markings.position.z + speed) % 40;
+                        gameStateRef.current.score += 1; setScore(Math.floor(gameStateRef.current.score));
+                        markings.position.z = (markings.position.z + speed) % 40;
                         const isRural = Math.floor(gameStateRef.current.totalDistance / 400) % 2 === 0;
                         let minZ = 10000; gameStateRef.current.gridRows.forEach(r => minZ = Math.min(minZ, r.z));
                         gameStateRef.current.gridRows.forEach(row => {
@@ -314,9 +275,9 @@
                         if(Math.abs(dx) > 0.1) { opp.mesh.position.x += dx * 0.03; opp.mesh.rotation.y = Math.PI + (dx>0?-0.1:0.1); } else opp.mesh.rotation.y = Math.PI;
                         if (Math.abs(opp.mesh.position.z) < 4.0 && Math.abs(playerCar.position.x - opp.mesh.position.x) < 3.0) {
                             sendVibration(); 
-                            setGameOver(true); gameStateRef.current.isGameOver = true; setScore(gameStateRef.current.score);
+                            setGameOver(true); gameStateRef.current.isGameOver = true; 
                             const h = localStorage.getItem('blockyRacerHighScore') ? parseInt(localStorage.getItem('blockyRacerHighScore')) : 0;
-                            if (gameStateRef.current.score > h) { localStorage.setItem('blockyRacerHighScore', gameStateRef.current.score); setHighScore(gameStateRef.current.score); setNewRecord(true); document.getElementById('highVal').innerText = gameStateRef.current.score; } else setNewRecord(false);
+                            if (gameStateRef.current.score > h) { localStorage.setItem('blockyRacerHighScore', gameStateRef.current.score); setHighScore(gameStateRef.current.score); setNewRecord(true); } else setNewRecord(false);
                         }
                         if(opp.mesh.position.z > 80) { scene.remove(opp.mesh); ops.splice(i, 1); }
                     }
@@ -334,7 +295,33 @@
 
             return (
                 <div style={{width:'100vw', height:'100vh', position:'relative', overflow:'hidden'}}>
+                    
+                    {/* --- UNMISSABLE DEBUG BOX --- */}
+                    <div style={{
+                        position: 'absolute', top: 10, left: 10, width: 300,
+                        backgroundColor: 'rgba(0, 0, 200, 0.9)', 
+                        border: '4px solid yellow', 
+                        color: 'white', padding: 20, 
+                        fontFamily: 'monospace', fontSize: 20, zIndex: 99999
+                    }}>
+                        <b>DEBUG MODE</b><br/>
+                        Status: {debugData.status}<br/>
+                        Raw In: {debugData.raw.toFixed(2)}<br/>
+                        Game Tilt: {debugData.tilt.toFixed(2)}<br/>
+                        <small style={{color:'yellow'}}>Need > 4.0 to turn</small>
+                    </div>
+
                     <div ref={mountRef} style={{width:'100%', height:'100%'}} />
+                    
+                    {/* HUD */}
+                    {gameStarted && (
+                    <div id="hud">
+                        <div style={{fontSize: 32, fontWeight: 'bold'}}>Score: {score}</div>
+                        <div style={{fontSize: 32, fontWeight: 'bold', color: '#FFFF00', marginTop: 5}}>High Score: {highScore}</div>
+                        <div style={{fontSize: 18, color: '#000000', marginTop: 10, fontWeight: 'bold', textShadow: '1px 1px 0 #fff'}}>Difficulty: {uiDifficulty}</div>
+                    </div>
+                    )}
+
                     {gameStarted && !gameOver && <div id="menuBtn" onClick={toggleMenu}>MENU</div>}
                     <div id="sideMenu" className={menuOpen ? 'open' : ''}>
                         <h2 style={{textAlign:'center', borderBottom:'1px solid #666', paddingBottom:'10px'}}>PAUSED</h2>
