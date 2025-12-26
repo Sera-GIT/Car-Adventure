@@ -45,18 +45,13 @@
 
     <script type="text/babel">
         const { useEffect, useRef, useState } = React;
-        const hideLoader = () => {
-          const l = document.getElementById('loader');
-          if (l) {
-            l.style.opacity = 0;
-            setTimeout(() => l.style.display = 'none', 500); }};
 
         window.updateDebug = (status, x) => {
             if(status) document.getElementById('st').innerText = status;
             if(x !== null && x !== undefined) document.getElementById('tx').innerText = x.toFixed(2);
         };
         
-        window.manualVibe = () => { console.log("Manual Vibe Clicked - Not connected yet."); };
+        window.manualVibe = () => { console.log("Manual Vibe - Not connected yet."); };
 
         const BlockyCarGame = () => {
             const mountRef = useRef(null);
@@ -69,7 +64,7 @@
             const [uiDifficulty, setUiDifficulty] = useState('Progressive');
             const [btConnected, setBtConnected] = useState(false);
 
-            const isVibratingRef = useRef(false);
+            const vibeTimeoutRef = useRef(null);
             const btRef = useRef({ device: null, server: null, sensorChar: null, vibeChar: null, tilt: 0 });
             const gameStateRef = useRef({
                 isGameOver: false, isPaused: false, score: 0,
@@ -88,139 +83,157 @@
             useEffect(() => {
               window.manualVibe = async () => {
                 if (!btRef.current.vibeChar) {
-                  alert("Not connected!");
+                  alert("Not connected! Pair controller first.");
                   return;
                 }
             
                 try {
-                  await btRef.current.vibeChar.writeValueWithoutResponse(
-                    new Uint8Array([1])
-                  );
+                  console.log("🧪 Sending test vibration...");
+                  await btRef.current.vibeChar.writeValueWithoutResponse(new Uint8Array([1]));
                   console.log("✓ TEST VIBE SENT!");
                 } catch (e) {
-                  console.error("Vibration failed:", e);
+                  console.error("❌ Test vibration failed:", e);
                 }
               };
             }, [btConnected]);
 
-               const connectBluetooth = async () => {
+            const connectBluetooth = async () => {
                 try {
                     window.updateDebug("SEARCHING...", null);
                     console.log("🔍 Starting Bluetooth scan...");
                     
-                const device = await navigator.bluetooth.requestDevice({
-        filters: [{ services: ["19b10000-e8f2-537e-4f6c-d104768a1214"]}]
-    });            
-                console.log("✓ Device selected:", device.name);
+                    const device = await navigator.bluetooth.requestDevice({
+                        filters: [{ services: [SERVICE_UUID] }]
+                    });            
+                    console.log("✓ Device selected:", device.name);
        
-                device.addEventListener('gattserverdisconnected', onDisconnected);
-                
-                console.log("🔌 Connecting to GATT server...");
-                const server = await device.gatt.connect();
-                console.log("✓ Connected to GATT!");
-                
-                console.log("🔍 Getting primary service...");
-                const service = await server.getPrimaryService(SERVICE_UUID);
-                console.log("✓ Service acquired!");
-                
-                console.log("🔍 Getting sensor characteristic...");
-                const sensorChar = await service.getCharacteristic(SENSOR_CHAR_UUID);
-                console.log("✓ Sensor characteristic ready!");
-                
-              // Locate this inside your connectBluetooth function
-                await sensorChar.startNotifications();
-                console.log("✓ Notifications enabled!");
-                                
-             sensorChar.addEventListener('characteristicvaluechanged', (event) => {
-                  const dataView = event.target.value;
-                  const val = event.target.value.getFloat32(0, true);
-                btRef.current.tilt = val;
-                window.updateDebug(null, val);
-                
-                  if (!isNaN(val)) {
-                    btRef.current.tilt = val;
-                    window.updateDebug(null, val);
-                  }
-                });
+                    device.addEventListener('gattserverdisconnected', onDisconnected);
+                    
+                    console.log("🔌 Connecting to GATT server...");
+                    const server = await device.gatt.connect();
+                    console.log("✓ Connected to GATT!");
+                    
+                    console.log("🔍 Getting primary service...");
+                    const service = await server.getPrimaryService(SERVICE_UUID);
+                    console.log("✓ Service acquired!");
+                    
+                    console.log("🔍 Getting sensor characteristic...");
+                    const sensorChar = await service.getCharacteristic(SENSOR_CHAR_UUID);
+                    console.log("✓ Sensor characteristic ready!");
+                    
+                    await sensorChar.startNotifications();
+                    console.log("✓ Notifications enabled!");
+                                    
+                    sensorChar.addEventListener('characteristicvaluechanged', (event) => {
+                        const val = event.target.value.getFloat32(0, true);
+                        if (!isNaN(val)) {
+                            btRef.current.tilt = val;
+                            window.updateDebug(null, val);
+                        }
+                    });
 
-
-                console.log("🔍 Getting vibration characteristic...");
-                const vibeChar = await service.getCharacteristic(VIBE_CHAR_UUID);
-                console.log("✓ Vibration characteristic ready!");
-                console.log("Properties:", {
-                    write: vibeChar.properties.write,
-                    writeWithoutResponse: vibeChar.properties.writeWithoutResponse
-                });
-                
-                btRef.current = { device, server, sensorChar, vibeChar, tilt: 0 };
-                setBtConnected(true);
-                window.updateDebug("CONNECTED", 0);
-                
-                console.log("╔═══════════════════════════════╗");
-                console.log("║  ✓ ALL SYSTEMS CONNECTED!    ║");
-                console.log("╚═══════════════════════════════╝");
-                
-                // Test vibration immediately after connection
-                setTimeout(async () => {
-                    console.log("🧪 Testing vibration on connect...");
-                    try {
-                        const testData = new Uint8Array([1]);
-                        await vibeChar.writeValue(testData);
-                        console.log("✓ Connection test vibration sent!");
-                    } catch (e) {
-                        console.warn("Connection test vibe failed:", e);
-                    }
-                }, 500);
-                
+                    console.log("🔍 Getting vibration characteristic...");
+                    const vibeChar = await service.getCharacteristic(VIBE_CHAR_UUID);
+                    console.log("✓ Vibration characteristic ready!");
+                    
+                    btRef.current = { device, server, sensorChar, vibeChar, tilt: 0 };
+                    setBtConnected(true);
+                    window.updateDebug("CONNECTED", 0);
+                    
+                    console.log("╔═══════════════════════════════╗");
+                    console.log("║  ✓ ALL SYSTEMS CONNECTED!    ║");
+                    console.log("╚═══════════════════════════════╝");
+                    
+                    // Test vibration on connect
+                    setTimeout(async () => {
+                        console.log("🧪 Connection test vibration...");
+                        try {
+                            await vibeChar.writeValueWithoutResponse(new Uint8Array([1]));
+                            console.log("✓ Test vibe sent!");
+                        } catch (e) {
+                            console.warn("Test vibe failed:", e);
+                        }
+                    }, 500);
+                    
                 } catch (error) {
                     console.error("╔═══════════════════════════════╗");
                     console.error("║    BLUETOOTH ERROR!          ║");
                     console.error("╚═══════════════════════════════╝");
                     console.error("Error:", error);
-                    console.error("Make sure ESP32 is powered and advertising!");
                     window.updateDebug("ERROR", null);
-                    alert("Connection Failed: " + error.message + "\n\nMake sure the ESP32 is on and showing 'READY! Waiting for game...'");
+                    alert("Connection Failed: " + error.message);
                 }
             };
 
             const onDisconnected = () => {
                 setBtConnected(false);
-                btRef.current.vibeChar = null;
+                btRef.current = { device: null, server: null, sensorChar: null, vibeChar: null, tilt: 0 };
                 window.updateDebug("DISCONNECTED", 0);
+                console.log("⚠ Controller disconnected");
             };
 
-           
             const sendVibration = async () => {
-                  if (!btRef.current.vibeChar || isVibratingRef.current) return;
+                if (!btRef.current.vibeChar) return;
                 
-                  isVibratingRef.current = true;
-                  try {
-                    await btRef.current.vibeChar.writeValueWithoutResponse(
-                      new Uint8Array([1])
-                    );
-                    console.log("✅ Vibe sent");
-                  } catch (err) {
-                    console.error("Vibe Error:", err);
-                  }
+                // Prevent multiple rapid vibrations
+                if (vibeTimeoutRef.current) return;
                 
-                  setTimeout(() => {
-                    isVibratingRef.current = false;
-                  }, 1000);
-                };
-                
+                try {
+                    console.log("🔔 Sending crash vibration...");
+                    await btRef.current.vibeChar.writeValueWithoutResponse(new Uint8Array([1]));
+                    console.log("✅ Crash vibe sent!");
+                    
+                    // Cooldown period
+                    vibeTimeoutRef.current = setTimeout(() => {
+                        vibeTimeoutRef.current = null;
+                    }, 1000);
+                } catch (err) {
+                    console.error("❌ Vibration error:", err);
+                }
+            };
 
-            const toggleMenu = () => { if (gameOver || !gameStarted) return; setMenuOpen(!menuOpen); gameStateRef.current.isPaused = !menuOpen; };
-            const changeDifficulty = (mode) => { gameStateRef.current.difficulty = mode; setUiDifficulty(mode); };
+            const toggleMenu = () => { 
+                if (gameOver || !gameStarted) return; 
+                setMenuOpen(!menuOpen); 
+                gameStateRef.current.isPaused = !menuOpen; 
+            };
+            
+            const changeDifficulty = (mode) => { 
+                gameStateRef.current.difficulty = mode; 
+                setUiDifficulty(mode); 
+            };
+            
             const triggerRestart = () => {
-                setGameOver(false); setScore(0); setNewRecord(false); setMenuOpen(false); setGameStarted(true);
+                console.log("🔄 Restarting game...");
+                
+                // Reset React state
+                setGameOver(false); 
+                setScore(0); 
+                setNewRecord(false); 
+                setMenuOpen(false); 
+                setGameStarted(true); // CRITICAL FIX: Set gameStarted to true
+                
+                // Reset game state
                 const ref = gameStateRef.current;
-                ref.isGameOver = false; ref.isPaused = false; ref.score = 0; ref.movingTime = 0; ref.totalDistance = 0; ref.gameStarted = true;
-                ref.opponents.forEach(o => { if(o.mesh && o.mesh.parent) o.mesh.parent.remove(o.mesh); });
+                ref.isGameOver = false; 
+                ref.isPaused = false; 
+                ref.score = 0; 
+                ref.movingTime = 0; 
+                ref.totalDistance = 0;
+                
+                // Clear opponents
+                ref.opponents.forEach(o => { 
+                    if(o.mesh && o.mesh.parent) o.mesh.parent.remove(o.mesh); 
+                });
                 ref.opponents = [];
+                
+                // Reset grid rows
                 for (let i = 0; i < ref.gridRows.length; i++) {
                     ref.gridRows[i].z = -350 + (i * 30);
                     updateRowVisuals(ref.gridRows[i], true); 
                 }
+                
+                console.log("✓ Game restarted!");
             };
 
             const updateRowVisuals = (rowObj, isRural) => {
@@ -236,6 +249,7 @@
                     setBuildingType(rowObj.buildR, 'random'); rowObj.buildR.visible = true;
                 }
             };
+            
             const setBuildingType = (group, type) => {
                 group.children.forEach(c => c.visible = false);
                 let idx = 0;
@@ -292,80 +306,69 @@
 
                 const keys = {}; const onKey = (e) => keys[e.key] = e.type === 'keydown';
                 window.addEventListener('keydown', onKey); window.addEventListener('keyup', onKey);
-                camera.position.set(0, 10, 35); let speed = 0; let spawnTimer = 0; let currentRot = 0, currentTilt = 0; const LANES = [-10, 0, 10]; let steerCurrent = 0;   let steerTarget  = 0;  // desired steering
+                camera.position.set(0, 10, 35); let speed = 0; let spawnTimer = 0; let currentRot = 0, currentTilt = 0; const LANES = [-10, 0, 10]; let steerCurrent = 0; let steerTarget = 0;
 
                 const animate = () => {
                     requestAnimationFrame(animate);
                     if (!gameStateRef.current.gameStarted || gameStateRef.current.isGameOver || gameStateRef.current.isPaused) {
-                        if(gameStateRef.current.gameStarted) renderer.render(scene, camera); return;
+                        if(gameStateRef.current.gameStarted) renderer.render(scene, camera); 
+                        return;
                     }
 
                     if (speed > 0) { gameStateRef.current.movingTime += 0.016; gameStateRef.current.totalDistance += speed; }
                     const t = gameStateRef.current.movingTime; const diffMode = gameStateRef.current.difficulty;
 
-                    let laneSwitchProb = 0, spawnRate = 80, displayDiff = 'Easy';
+                    let laneSwitchProb = 0, spawnRate = 80;
                     if (diffMode === 'Progressive') {
-                        if (t > 30 && t <= 60) { displayDiff='Medium'; laneSwitchProb=0.005; spawnRate=60; }
-                        else if (t > 60) { displayDiff='Hard'; laneSwitchProb=0.02; spawnRate=55; }
+                        if (t > 30 && t <= 60) { laneSwitchProb=0.005; spawnRate=60; }
+                        else if (t > 60) { laneSwitchProb=0.02; spawnRate=55; }
                     } else {
-                        displayDiff = diffMode;
                         if (diffMode === 'Medium') { laneSwitchProb=0.005; spawnRate=60; }
                         else if (diffMode === 'Hard') { laneSwitchProb=0.02; spawnRate=55; }
                     }
                     if(keys['w']||keys['ArrowUp']) speed = Math.min(speed+0.025, 0.9); else speed = Math.max(speed-0.01, 0);
 
-                    let tr = 0, tt = 0;
-                    const tilt = btRef.current.tilt;
-                    console.log("IMU tilt:", btRef.current.tilt);
-
-                    // Roll-based steering with hysteresis zones
-                    // ESP32 sends: -5 (Left), 0 (Center), 5 (Right)
-                 // --- TARGET steering (slow + deliberate) ---
-                    // --- TARGET steering (slow + deliberate) ---
+                    // FIXED: Improved steering logic
                     steerTarget = 0;
+                    const tiltValue = btRef.current.tilt;
 
-                    // 1. Inputs (Check Keyboard first, then Bluetooth)
                     if (keys['a'] || keys['ArrowLeft']) {
-                        steerTarget = -0.4; // Keyboard Left
+                        steerTarget = -0.5;
                     } 
                     else if (keys['d'] || keys['ArrowRight']) {
-                        steerTarget = 0.4;  // Keyboard Right
+                        steerTarget = 0.5;
                     } 
-                    // Handle the Bluetooth IMU values (-3.0 to 3.0)
-                    else {
-                        const tiltValue = btRef.current.tilt;
-                        
-                        if (tiltValue <= -2.0) {
-                            steerTarget = -0.4; // IMU Turn Left
-                        } 
-                        else if (tiltValue >= 2.0) {
-                            steerTarget = 0.4;  // IMU Turn Right
-                        } 
-                        else {
-                            steerTarget = 0;    // IMU Neutral / Center
-                        }
+                    else if (tiltValue <= -2.5) {
+                        steerTarget = -0.5; // Turn Left
+                    } 
+                    else if (tiltValue >= 2.5) {
+                        steerTarget = 0.5;  // Turn Right
                     }
                     
-                    // 2. Smooth steering (Keep this low-pass filter logic)
-                    const STEER_SMOOTH = 0.25;   // stronger response
+                    // Smooth steering
+                    const STEER_SMOOTH = 0.20;
                     steerCurrent += (steerTarget - steerCurrent) * STEER_SMOOTH;
-                    
-                    // deadzone clamp
-                    if (Math.abs(steerCurrent) < 0.01) steerCurrent = 0;
+                    if (Math.abs(steerCurrent) < 0.02) steerCurrent = 0;
 
-                    // 3. Apply movement with bounds
+                    // Apply movement
                     if ((playerCar.position.x > -13 && steerCurrent < 0) || 
                         (playerCar.position.x < 13 && steerCurrent > 0)) {
                         playerCar.position.x += steerCurrent;
                     }
-                                        
-                    // 4. Gentle visual rotation
-                    tr = -steerCurrent * 0.25;
-                    tt = -steerCurrent * 0.15;
                     
-                    currentRot += (tr-currentRot)*0.1; currentTilt += (tt-currentTilt)*0.1;
-                    playerCar.rotation.y = currentRot; playerCar.rotation.z = currentTilt;
-                    camera.position.x = playerCar.position.x * 0.6; camera.lookAt(playerCar.position.x * 0.3, 2, -50);
+                    // Clamp position
+                    playerCar.position.x = Math.max(-13, Math.min(13, playerCar.position.x));
+                    
+                    // Visual rotation
+                    const tr = -steerCurrent * 0.3;
+                    const tt = -steerCurrent * 0.15;
+                    currentRot += (tr-currentRot)*0.1; 
+                    currentTilt += (tt-currentTilt)*0.1;
+                    playerCar.rotation.y = currentRot; 
+                    playerCar.rotation.z = currentTilt;
+                    
+                    camera.position.x = playerCar.position.x * 0.6; 
+                    camera.lookAt(playerCar.position.x * 0.3, 2, -50);
 
                     if(speed > 0) {
                         gameStateRef.current.score += 1; setScore(Math.floor(gameStateRef.current.score));
@@ -386,6 +389,7 @@
                         const c = createCar(type, col); c.position.set(LANES[Math.floor(Math.random()*3)], 0, -250); c.rotation.y = Math.PI;
                         scene.add(c); gameStateRef.current.opponents.push({ mesh: c, laneIdx: Math.floor(Math.random()*3) });
                     }
+                    
                     const ops = gameStateRef.current.opponents;
                     for (let i = ops.length - 1; i >= 0; i--) {
                         const opp = ops[i]; opp.mesh.position.z += trafficSpeed;
@@ -394,11 +398,25 @@
                         }
                         const targetX = LANES[opp.laneIdx]; const dx = targetX - opp.mesh.position.x;
                         if(Math.abs(dx) > 0.1) { opp.mesh.position.x += dx * 0.03; opp.mesh.rotation.y = Math.PI + (dx>0?-0.1:0.1); } else opp.mesh.rotation.y = Math.PI;
-                        if (Math.abs(opp.mesh.position.z) < 4.0 && Math.abs(playerCar.position.x - opp.mesh.position.x) < 3.0) {
+                        
+                        // FIXED: Better collision detection
+                        const distanceZ = Math.abs(opp.mesh.position.z - playerCar.position.z);
+                        const distanceX = Math.abs(opp.mesh.position.x - playerCar.position.x);
+                        
+                        if (distanceZ < 4.0 && distanceX < 3.0) {
+                            console.log("💥 CRASH DETECTED!");
                             sendVibration(); 
-                            setGameOver(true); gameStateRef.current.isGameOver = true; 
+                            setGameOver(true); 
+                            gameStateRef.current.isGameOver = true; 
+                            
                             const h = localStorage.getItem('blockyRacerHighScore') ? parseInt(localStorage.getItem('blockyRacerHighScore')) : 0;
-                            if (gameStateRef.current.score > h) { localStorage.setItem('blockyRacerHighScore', gameStateRef.current.score); setHighScore(gameStateRef.current.score); setNewRecord(true); } else setNewRecord(false);
+                            if (gameStateRef.current.score > h) { 
+                                localStorage.setItem('blockyRacerHighScore', gameStateRef.current.score); 
+                                setHighScore(gameStateRef.current.score); 
+                                setNewRecord(true); 
+                            } else {
+                                setNewRecord(false);
+                            }
                         }
                         if(opp.mesh.position.z > 80) { scene.remove(opp.mesh); ops.splice(i, 1); }
                     }
@@ -411,15 +429,23 @@
                 return () => { window.removeEventListener('resize', handleResize); window.removeEventListener('keydown', onKey); window.removeEventListener('keyup', onKey); if(mountRef.current) mountRef.current.innerHTML = ''; };
             }, []);
 
-            const onStartGame = () => { setGameStarted(true); gameStateRef.current.gameStarted = true; gameStateRef.current.isPaused = false; };
-            const onPlayAgain = () => { triggerRestart(); };
+            const onStartGame = () => { 
+                console.log("▶ Starting game...");
+                setGameStarted(true); 
+                gameStateRef.current.gameStarted = true; 
+                gameStateRef.current.isPaused = false; 
+            };
+            
+            const onPlayAgain = () => { 
+                triggerRestart(); 
+            };
 
             return (
                 <div style={{width:'100vw', height:'100vh', position:'relative', overflow:'hidden'}}>
                     
                     <div ref={mountRef} style={{width:'100%', height:'100%'}} />
                     
-                    {gameStarted && (
+                    {gameStarted && !gameOver && (
                     <div id="hud">
                         <div style={{fontSize: 32, fontWeight: 'bold'}}>Score: {score}</div>
                         <div style={{fontSize: 32, fontWeight: 'bold', color: '#FFFF00', marginTop: 5}}>High Score: {highScore}</div>
@@ -427,7 +453,9 @@
                     </div>
                     )}
 
+                    {/* FIXED: Menu button only shows when game is running and not crashed */}
                     {gameStarted && !gameOver && <div id="menuBtn" onClick={toggleMenu}>MENU</div>}
+                    
                     <div id="sideMenu" className={menuOpen ? 'open' : ''}>
                         <h2 style={{textAlign:'center', borderBottom:'1px solid #666', paddingBottom:'10px'}}>PAUSED</h2>
                         <div style={{marginBottom:'20px'}}>
@@ -439,15 +467,19 @@
                         </div>
                         <div className="menu-opt" style={{background:'#2196F3', marginTop:'auto'}} onClick={toggleMenu}>RESUME GAME</div>
                     </div>
+                    
                     {!gameStarted && (
                         <div id="overlayScreen">
                             <h1 style={{fontSize:'80px', margin:0, color:'#4CAF50', textShadow:'4px 4px 0 #000'}}>BLOCKY RACER</h1>
                             <p style={{fontSize:'24px', opacity:0.8}}>Bluetooth Edition</p>
                             <p style={{marginTop:'20px', fontSize:'18px'}}>High Score: {highScore}</p>
-                            <button className={`bt-btn ${btConnected?'connected':''}`} onClick={!btConnected?connectBluetooth:null}>{btConnected?'✓ PAIRED':'📡 PAIR CONTROLLER'}</button>
+                            <button className={`bt-btn ${btConnected?'connected':''}`} onClick={!btConnected?connectBluetooth:null}>
+                                {btConnected?'✓ PAIRED':'📡 PAIR CONTROLLER'}
+                            </button>
                             <button className="big-btn" onClick={onStartGame}>START ENGINE</button>
                         </div>
                     )}
+                    
                     {gameOver && (
                         <div id="overlayScreen">
                             <h1 style={{color:'#ff4444', fontSize:'80px', margin:0}}>CRASHED!</h1>
@@ -465,19 +497,3 @@
     </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
