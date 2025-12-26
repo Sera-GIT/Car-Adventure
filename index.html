@@ -102,16 +102,28 @@
            const connectBluetooth = async () => {
             try {
                 window.updateDebug("SEARCHING...", null);
+                console.log("Starting Bluetooth connection...");
+                
                 const device = await navigator.bluetooth.requestDevice({
                     filters: [{ services: [SERVICE_UUID] }]
                 });
+                
+                console.log("Device selected:", device.name);
        
                 device.addEventListener('gattserverdisconnected', onDisconnected);
+                
+                console.log("Connecting to GATT server...");
                 const server = await device.gatt.connect();
+                console.log("Connected! Getting service...");
+                
                 const service = await server.getPrimaryService(SERVICE_UUID);
+                console.log("Service found! Getting characteristics...");
                 
                 const sensorChar = await service.getCharacteristic(SENSOR_CHAR_UUID);
+                console.log("Sensor characteristic found!");
+                
                 await sensorChar.startNotifications();
+                console.log("Notifications started!");
                 
                 sensorChar.addEventListener('characteristicvaluechanged', (event) => {
                     const decoder = new TextDecoder('utf-8');
@@ -124,14 +136,19 @@
                 });
 
                 const vibeChar = await service.getCharacteristic(VIBE_CHAR_UUID);
+                console.log("Vibration characteristic found!");
+                console.log("Vibe properties:", vibeChar.properties);
+                
                 btRef.current = { device, server, sensorChar, vibeChar, tilt: 0 };
                 setBtConnected(true);
                 window.updateDebug("CONNECTED", 0);
                 
+                console.log("✓ ALL SYSTEMS READY!");
+                
                 } catch (error) {
                     console.error("Bluetooth Error:", error);
                     window.updateDebug("ERROR", null);
-                    alert("Connection Failed. Check ESP32 and try again.");
+                    alert("Connection Failed: " + error.message);
                 }
             };
 
@@ -145,19 +162,38 @@
                 if (btRef.current.vibeChar && !isVibratingRef.current) {
                     isVibratingRef.current = true;
                     try {
-                        const encoder = new TextEncoder('utf-8');
-                        console.log("SENDING CRASH VIBRATION!");
+                        console.log("╔══════════════════════════════╗");
+                        console.log("║  CRASH! SENDING VIBRATION!  ║");
+                        console.log("╚══════════════════════════════╝");
+                        
+                        const data = new Uint8Array([1]);
+                        
                         if (btRef.current.vibeChar.properties.writeWithoutResponse) {
-                            await btRef.current.vibeChar.writeValueWithoutResponse(encoder.encode('1'));
+                            console.log("Using writeWithoutResponse...");
+                            await btRef.current.vibeChar.writeValueWithoutResponse(data);
+                        } else if (btRef.current.vibeChar.properties.write) {
+                            console.log("Using write...");
+                            await btRef.current.vibeChar.writeValue(data);
                         } else {
-                            await btRef.current.vibeChar.writeValue(encoder.encode('1'));
+                            console.error("NO WRITE PROPERTIES AVAILABLE!");
                         }
-                        console.log("CRASH VIBE SENT SUCCESSFULLY!");
+                        
+                        console.log("✓ VIBRATION COMMAND SENT!");
                     } catch(e) { 
-                        console.error("Crash Vibe Error:", e); 
+                        console.error("╔══════════════════════════════╗");
+                        console.error("║   VIBRATION SEND FAILED!    ║");
+                        console.error("╚══════════════════════════════╝");
+                        console.error("Error details:", e); 
                     }
                     
                     setTimeout(() => { isVibratingRef.current = false; }, 1500);
+                } else {
+                    if (!btRef.current.vibeChar) {
+                        console.warn("⚠ No vibration characteristic available");
+                    }
+                    if (isVibratingRef.current) {
+                        console.warn("⚠ Vibration already in progress");
+                    }
                 }
             };
 
