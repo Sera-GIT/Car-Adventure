@@ -84,22 +84,20 @@
                 window.manualVibe = async () => {
                     if (btRef.current.vibeChar) {
                         console.log("═══════════════════════════════");
-                        console.log("   MANUAL TEST VIBRATION");
+                        console.log("   🧪 MANUAL TEST VIBRATION");
                         console.log("═══════════════════════════════");
                         try {
                             const data = new Uint8Array([1]);
-                            if (btRef.current.vibeChar.properties.writeWithoutResponse) {
-                                await btRef.current.vibeChar.writeValueWithoutResponse(data);
-                            } else {
-                                await btRef.current.vibeChar.writeValue(data);
-                            }
+                            await btRef.current.vibeChar.writeValueWithoutResponse(data);
                             console.log("✓ TEST VIBE SENT!");
+                            alert("Vibration command sent! Check ESP32 serial monitor.");
                         } catch(e) { 
-                            console.error("✗ Manual Vibe Failed:", e); 
+                            console.error("✗ Manual Vibe Failed:", e);
+                            alert("Vibration failed: " + e.message);
                         }
                     } else {
-                        alert("Not connected to Controller!");
-                        console.error("No vibration characteristic available");
+                        alert("Not connected to Controller!\n\nClick 'PAIR CONTROLLER' first.");
+                        console.error("No vibration characteristic - not connected");
                     }
                 };
             }, [btConnected]);
@@ -107,28 +105,31 @@
            const connectBluetooth = async () => {
             try {
                 window.updateDebug("SEARCHING...", null);
-                console.log("Starting Bluetooth connection...");
+                console.log("🔍 Starting Bluetooth scan...");
                 
                 const device = await navigator.bluetooth.requestDevice({
-                    filters: [{ services: [SERVICE_UUID] }]
+                    filters: [{ name: 'BlockyRacer' }],
+                    optionalServices: [SERVICE_UUID]
                 });
                 
-                console.log("Device selected:", device.name);
+                console.log("✓ Device selected:", device.name);
        
                 device.addEventListener('gattserverdisconnected', onDisconnected);
                 
-                console.log("Connecting to GATT server...");
+                console.log("🔌 Connecting to GATT server...");
                 const server = await device.gatt.connect();
-                console.log("Connected! Getting service...");
+                console.log("✓ Connected to GATT!");
                 
+                console.log("🔍 Getting primary service...");
                 const service = await server.getPrimaryService(SERVICE_UUID);
-                console.log("Service found! Getting characteristics...");
+                console.log("✓ Service acquired!");
                 
+                console.log("🔍 Getting sensor characteristic...");
                 const sensorChar = await service.getCharacteristic(SENSOR_CHAR_UUID);
-                console.log("Sensor characteristic found!");
+                console.log("✓ Sensor characteristic ready!");
                 
                 await sensorChar.startNotifications();
-                console.log("Notifications started!");
+                console.log("✓ Notifications enabled!");
                 
                 sensorChar.addEventListener('characteristicvaluechanged', (event) => {
                     const decoder = new TextDecoder('utf-8');
@@ -140,20 +141,42 @@
                     }
                 });
 
+                console.log("🔍 Getting vibration characteristic...");
                 const vibeChar = await service.getCharacteristic(VIBE_CHAR_UUID);
-                console.log("Vibration characteristic found!");
-                console.log("Vibe properties:", vibeChar.properties);
+                console.log("✓ Vibration characteristic ready!");
+                console.log("Properties:", {
+                    write: vibeChar.properties.write,
+                    writeWithoutResponse: vibeChar.properties.writeWithoutResponse
+                });
                 
                 btRef.current = { device, server, sensorChar, vibeChar, tilt: 0 };
                 setBtConnected(true);
                 window.updateDebug("CONNECTED", 0);
                 
-                console.log("✓ ALL SYSTEMS READY!");
+                console.log("╔═══════════════════════════════╗");
+                console.log("║  ✓ ALL SYSTEMS CONNECTED!    ║");
+                console.log("╚═══════════════════════════════╝");
+                
+                // Test vibration immediately after connection
+                setTimeout(async () => {
+                    console.log("🧪 Testing vibration on connect...");
+                    try {
+                        const testData = new Uint8Array([1]);
+                        await vibeChar.writeValueWithoutResponse(testData);
+                        console.log("✓ Connection test vibration sent!");
+                    } catch (e) {
+                        console.warn("Connection test vibe failed:", e);
+                    }
+                }, 500);
                 
                 } catch (error) {
-                    console.error("Bluetooth Error:", error);
+                    console.error("╔═══════════════════════════════╗");
+                    console.error("║    BLUETOOTH ERROR!          ║");
+                    console.error("╚═══════════════════════════════╝");
+                    console.error("Error:", error);
+                    console.error("Make sure ESP32 is powered and advertising!");
                     window.updateDebug("ERROR", null);
-                    alert("Connection Failed: " + error.message);
+                    alert("Connection Failed: " + error.message + "\n\nMake sure the ESP32 is on and showing 'READY! Waiting for game...'");
                 }
             };
 
@@ -164,42 +187,43 @@
             };
 
             const sendVibration = async () => {
-                if (btRef.current.vibeChar && !isVibratingRef.current) {
-                    isVibratingRef.current = true;
-                    try {
-                        console.log("╔══════════════════════════════╗");
-                        console.log("║  CRASH! SENDING VIBRATION!  ║");
-                        console.log("╚══════════════════════════════╝");
-                        
-                        const data = new Uint8Array([1]);
-                        
-                        if (btRef.current.vibeChar.properties.writeWithoutResponse) {
-                            console.log("Using writeWithoutResponse...");
-                            await btRef.current.vibeChar.writeValueWithoutResponse(data);
-                        } else if (btRef.current.vibeChar.properties.write) {
-                            console.log("Using write...");
-                            await btRef.current.vibeChar.writeValue(data);
-                        } else {
-                            console.error("NO WRITE PROPERTIES AVAILABLE!");
-                        }
-                        
-                        console.log("✓ VIBRATION COMMAND SENT!");
-                    } catch(e) { 
-                        console.error("╔══════════════════════════════╗");
-                        console.error("║   VIBRATION SEND FAILED!    ║");
-                        console.error("╚══════════════════════════════╝");
-                        console.error("Error details:", e); 
-                    }
+                if (!btRef.current.vibeChar) {
+                    console.error("⚠ Cannot vibrate - no characteristic!");
+                    return;
+                }
+                
+                if (isVibratingRef.current) {
+                    console.log("⚠ Vibration already in progress, skipping");
+                    return;
+                }
+                
+                isVibratingRef.current = true;
+                
+                try {
+                    console.log("╔══════════════════════════════╗");
+                    console.log("║   💥 CRASH! VIBRATING!      ║");
+                    console.log("╚══════════════════════════════╝");
                     
-                    setTimeout(() => { isVibratingRef.current = false; }, 1500);
-                } else {
-                    if (!btRef.current.vibeChar) {
-                        console.warn("⚠ No vibration characteristic available");
-                    }
-                    if (isVibratingRef.current) {
-                        console.warn("⚠ Vibration already in progress");
+                    const data = new Uint8Array([1]);
+                    await btRef.current.vibeChar.writeValueWithoutResponse(data);
+                    
+                    console.log("✓ Vibration command sent successfully!");
+                } catch(e) { 
+                    console.error("╔══════════════════════════════╗");
+                    console.error("║  ✗ VIBRATION SEND FAILED!   ║");
+                    console.error("╚══════════════════════════════╝");
+                    console.error("Error:", e);
+                    
+                    // Try reconnecting
+                    if (e.message && e.message.includes('GATT')) {
+                        console.log("🔄 Attempting reconnect...");
+                        setBtConnected(false);
                     }
                 }
+                
+                setTimeout(() => { 
+                    isVibratingRef.current = false; 
+                }, 1500);
             };
 
             const toggleMenu = () => { if (gameOver || !gameStarted) return; setMenuOpen(!menuOpen); gameStateRef.current.isPaused = !menuOpen; };
@@ -310,7 +334,9 @@
                     let tr = 0, tt = 0;
                     const tilt = btRef.current.tilt;
 
-                    const SENSITIVITY = 0.25;
+                    // Roll-based steering with hysteresis zones
+                    // ESP32 sends: -5 (Left), 0 (Center), 5 (Right)
+                    const SENSITIVITY = 0.1;
                     let steer = 0;
                     
                     if (keys['a'] || keys['ArrowLeft']) steer = -0.5;
