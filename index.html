@@ -3,18 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Blocky Racer: Final Fix</title>
+    <title>Blocky Racer: Angle Edition</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; font-family: Arial, sans-serif; }
-        
-        /* DEBUG OVERLAY */
-        #debug-panel {
-            position: fixed; top: 10px; left: 10px; width: 250px;
-            background: rgba(0,0,0,0.8); color: #0f0; 
-            padding: 15px; border: 2px solid #0f0;
-            font-family: monospace; z-index: 10000;
-        }
-        
         #loader { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #000; color: white; display: flex; justify-content: center; align-items: center; z-index: 999; transition: opacity 0.5s; }
         #hud { position: absolute; top: 20px; right: 20px; color: white; text-shadow: 2px 2px 4px #000; z-index: 10; pointer-events: none; text-align: right; }
         #menuBtn { position: absolute; bottom: 20px; right: 20px; background: rgba(0,0,0,0.6); color: white; border: 2px solid white; padding: 10px 20px; font-size: 18px; font-weight: bold; cursor: pointer; z-index: 20; border-radius: 5px; pointer-events: auto; }
@@ -34,30 +25,14 @@
 </head>
 <body>
     
-    <div id="debug-panel">
-        <div>STATUS: <span id="st">DISCONNECTED</span></div>
-        <div>TILT X: <span id="tx">0.00</span></div>
-        <button onclick="window.manualVibe()" style="background:red; color:white; border:none; padding:10px; width:100%; margin-top:10px; cursor:pointer;">TEST VIBRATION</button>
-    </div>
-
     <div id="loader">Loading Assets...</div>
     <div id="root"></div>
 
     <script type="text/babel">
         const { useEffect, useRef, useState } = React;
 
-        // GLOBAL DEBUG HELPERS
-        window.updateDebug = (status, x) => {
-            if(status) document.getElementById('st').innerText = status;
-            if(x !== null) document.getElementById('tx').innerText = x.toFixed(2);
-        };
-        
-        // GLOBAL MANUAL VIBE FUNCTION
-        window.manualVibe = () => { console.log("Manual Vibe Clicked - But not connected yet."); };
-
         const BlockyCarGame = () => {
             const mountRef = useRef(null);
-            const crashTriggeredRef = useRef(false);
             const [gameStarted, setGameStarted] = useState(false);
             const [gameOver, setGameOver] = useState(false);
             const [score, setScore] = useState(0);
@@ -83,30 +58,8 @@
                 if (saved) setHighScore(parseInt(saved));
             }, []);
 
-            // EXPOSE VIBE TO WINDOW FOR BUTTON
-            useEffect(() => {
-                window.manualVibe = async () => {
-                    if (btRef.current.vibeChar) {
-                        console.log("SENDING MANUAL VIBE...");
-                        try {
-                            const encoder = new TextEncoder('utf-8');
-                            // Try WriteWithoutResponse first (faster)
-                            if (btRef.current.vibeChar.properties.writeWithoutResponse) {
-                                await btRef.current.vibeChar.writeValueWithoutResponse(encoder.encode('1'));
-                            } else {
-                                await btRef.current.vibeChar.writeValue(encoder.encode('1'));
-                            }
-                            console.log("VIBE SENT!");
-                        } catch(e) { console.error("Manual Vibe Failed:", e); }
-                    } else {
-                        alert("Not connected to Controller!");
-                    }
-                };
-            }, [btConnected]);
-
            const connectBluetooth = async () => {
             try {
-                window.updateDebug("SEARCHING...", null);
                 const device = await navigator.bluetooth.requestDevice({
                     filters: [{ services: [SERVICE_UUID] }]
                 });
@@ -123,19 +76,16 @@
                     const rawString = decoder.decode(event.target.value);
                     let val = parseFloat(rawString);
                     if (!isNaN(val)) {
-                        btRef.current.tilt = val;
-                        window.updateDebug(null, val);
+                        btRef.current.tilt = val; 
                     }
                 });
 
                 const vibeChar = await service.getCharacteristic(VIBE_CHAR_UUID);
                 btRef.current = { device, server, sensorChar, vibeChar, tilt: 0 };
                 setBtConnected(true);
-                window.updateDebug("CONNECTED", 0);
                 
                 } catch (error) {
                     console.error("Bluetooth Error:", error);
-                    window.updateDebug("ERROR", null);
                     alert("Connection Failed. Did you reset the ESP32?");
                 }
             };
@@ -143,32 +93,23 @@
             const onDisconnected = () => {
                 setBtConnected(false);
                 btRef.current.vibeChar = null;
-                window.updateDebug("DISCONNECTED", 0);
             };
-              
-                const sendVibration = async () => {
-                  if (!btRef.current.vibeChar) return;
-                  if (crashTriggeredRef.current) return;
-              
-                  crashTriggeredRef.current = true;
-              
-                  try {
-                      const encoder = new TextEncoder();
-                      console.log("SENDING CRASH VIBRATION");
-                      await btRef.current.vibeChar.writeValue(
-                          encoder.encode("1")
-                      );
-                      console.log("VIBRATION SENT");
-                  } catch (e) {
-                      console.error("Vibration failed:", e);
-                  }
-              };
 
-            // --- GAME LOGIC ---
+            const sendVibration = async () => {
+                if (btRef.current.vibeChar && !isVibratingRef.current) {
+                    isVibratingRef.current = true;
+                    try {
+                        const encoder = new TextEncoder('utf-8');
+                        await btRef.current.vibeChar.writeValue(encoder.encode('1'));
+                    } catch(e) { console.error("Crash Vibe Error", e); }
+                    setTimeout(() => { isVibratingRef.current = false; }, 1000);
+                }
+            };
+
             const toggleMenu = () => { if (gameOver || !gameStarted) return; setMenuOpen(!menuOpen); gameStateRef.current.isPaused = !menuOpen; };
             const changeDifficulty = (mode) => { gameStateRef.current.difficulty = mode; setUiDifficulty(mode); };
+            
             const triggerRestart = () => {
-                crashTriggeredRef.current = false;
                 setGameOver(false); setScore(0); setNewRecord(false); setMenuOpen(false);
                 const ref = gameStateRef.current;
                 ref.isGameOver = false; ref.isPaused = false; ref.score = 0; ref.movingTime = 0; ref.totalDistance = 0;
@@ -180,7 +121,14 @@
                 }
             };
 
-            // ... (Visual helpers same as before) ...
+            useEffect(() => {
+                const handleKeyDown = (e) => {
+                    if (gameOver && e.code === 'Space') triggerRestart();
+                };
+                window.addEventListener('keydown', handleKeyDown);
+                return () => window.removeEventListener('keydown', handleKeyDown);
+            }, [gameOver]); 
+
             const updateRowVisuals = (rowObj, isRural) => {
                 rowObj.treeOuterL.visible = isRural; rowObj.treeOuterR.visible = isRural;
                 rowObj.treeInnerL.visible = false; rowObj.treeInnerR.visible = false;
@@ -214,36 +162,8 @@
                 renderer.shadowMap.type = THREE.PCFSoftShadowMap; 
                 mountRef.current.appendChild(renderer.domElement);
 
-                const loaderEl = document.getElementById('loader');
-const textureLoader = new THREE.TextureLoader();
-
-// SAFETY TIMEOUT (guarantees loader disappears)
-setTimeout(() => {
-  if (loaderEl) {
-    loaderEl.style.opacity = 0;
-    setTimeout(() => loaderEl.style.display = 'none', 500);
-  }
-}, 3000);
-
-textureLoader.load(
-  'https://images.unsplash.com/photo-1513002749550-c59d786b8e6c?q=80&w=2560&auto=format&fit=crop',
-  (t) => {
-    scene.background = t;
-    if (loaderEl) {
-      loaderEl.style.opacity = 0;
-      setTimeout(() => loaderEl.style.display = 'none', 500);
-    }
-  },
-  undefined,
-  (err) => {
-    console.warn("Background texture failed, continuing without it");
-    if (loaderEl) {
-      loaderEl.style.opacity = 0;
-      setTimeout(() => loaderEl.style.display = 'none', 500);
-    }
-  }
-);
-
+                new THREE.TextureLoader().load('https://images.unsplash.com/photo-1513002749550-c59d786b8e6c?q=80&w=2560&auto=format&fit=crop', 
+                    (t) => { scene.background = t; const l = document.getElementById('loader'); if(l) { l.style.opacity = 0; setTimeout(() => l.style.display = 'none', 500); } });
 
                 const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); scene.add(ambientLight);
                 const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
@@ -256,9 +176,8 @@ textureLoader.load(
                 const createMultiBuilding=()=>{const g=new THREE.Group();const c=[0xE6E6FA,0xF5DEB3,0xFFB6C1,0x87CEFA,0x98FB98,0xD3D3D3][Math.floor(Math.random()*6)];const wm=new THREE.MeshLambertMaterial({color:0x333333});const dm=new THREE.MeshLambertMaterial({color:0x4A3627});const rm=new THREE.MeshLambertMaterial({color:0x8B4513});const h=new THREE.Group();const hw=new THREE.Mesh(new THREE.BoxGeometry(12,10,12),new THREE.MeshLambertMaterial({color:c}));hw.position.y=5;hw.castShadow=true;h.add(hw);const hr=new THREE.Mesh(new THREE.ConeGeometry(9,6,4),rm);hr.position.y=13;hr.rotation.y=Math.PI/4;h.add(hr);h.add(new THREE.Mesh(new THREE.BoxGeometry(3,6,0.5),dm).translateY(3).translateZ(6));h.add(new THREE.Mesh(new THREE.BoxGeometry(2.5,2.5,0.5),wm).translateY(6).translateX(-3.5).translateZ(6));h.add(new THREE.Mesh(new THREE.BoxGeometry(2.5,2.5,0.5),wm).translateY(6).translateX(3.5).translateZ(6));h.add(new THREE.Mesh(new THREE.BoxGeometry(2,4,2),new THREE.MeshLambertMaterial({color:0x555555})).translateY(13).translateX(3).translateZ(-3));g.add(h);const s=new THREE.Group();const sw=new THREE.Mesh(new THREE.BoxGeometry(14,45,14),new THREE.MeshLambertMaterial({color:0xaaaaaa}));sw.position.y=22.5;sw.castShadow=true;s.add(sw);for(let i=0;i<6;i++){const w=new THREE.Group();const wn=new THREE.Mesh(new THREE.BoxGeometry(3,4,0.5),wm);w.add(wn.clone().translateX(-4));w.add(wn.clone().translateX(4));w.position.set(0,5+i*6,7);s.add(w);}s.visible=false;g.add(s);const f=new THREE.Group();const fw=new THREE.Mesh(new THREE.BoxGeometry(18,12,18),new THREE.MeshLambertMaterial({color:0xCD5C5C}));fw.position.y=6;fw.castShadow=true;f.add(fw);f.add(new THREE.Mesh(new THREE.CylinderGeometry(1.5,1.5,10,12),new THREE.MeshLambertMaterial({color:0x333333})).translateY(15).translateX(-5).translateZ(-5));f.add(new THREE.Mesh(new THREE.CylinderGeometry(1.5,1.5,10,12),new THREE.MeshLambertMaterial({color:0x333333})).translateY(15).translateX(5));f.visible=false;g.add(f);const gl=new THREE.Group();const gw=new THREE.Mesh(new THREE.BoxGeometry(15,30,15),new THREE.MeshLambertMaterial({color:0x00CED1,transparent:true,opacity:0.8}));gw.position.y=15;gw.castShadow=true;gl.add(gw);for(let i=1;i<5;i++)gl.add(new THREE.Mesh(new THREE.BoxGeometry(14.5,0.5,14.5),new THREE.MeshLambertMaterial({color:0xffffff})).translateY(i*6));gl.visible=false;g.add(gl);return g;};
                 const createTree=()=>{const g=new THREE.Group();const t=Math.random();if(t<0.3){g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.7,2.5,6),new THREE.MeshLambertMaterial({color:0x3d2817})).translateY(1.25));const l=new THREE.Mesh(new THREE.ConeGeometry(3,7,8),new THREE.MeshLambertMaterial({color:0x1a472a}));l.position.y=5;l.castShadow=true;g.add(l);}else if(t<0.6){g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.6,3.5,6),new THREE.MeshLambertMaterial({color:0x5C4033})).translateY(1.75));const c=[0xFFB7C5,0xFF69B4,0xFFA500,0xFFFF00][Math.floor(Math.random()*4)];const l=new THREE.Mesh(new THREE.DodecahedronGeometry(2.8),new THREE.MeshLambertMaterial({color:c}));l.position.y=4.5;l.castShadow=true;g.add(l);}else{g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.6,0.7,3,6),new THREE.MeshLambertMaterial({color:0x8B4513})).translateY(1.5));const l=new THREE.Mesh(new THREE.SphereGeometry(3,7,7),new THREE.MeshLambertMaterial({color:0x228B22}));l.position.y=4;l.castShadow=true;g.add(l);}g.scale.set(1.3,1.3,1.3);return g;};
                 
-                // --- CAR CREATOR (AMBULANCE FIX) ---
                 const createCar=(t,c)=>{const g=new THREE.Group();const p=new THREE.MeshLambertMaterial({color:c});const gl=new THREE.MeshLambertMaterial({color:0x222222});const r=new THREE.MeshLambertMaterial({color:0x111111});const m=new THREE.MeshLambertMaterial({color:0x888888});const lr=new THREE.MeshLambertMaterial({color:0xff0000});const ly=new THREE.MeshLambertMaterial({color:0xffff00});const mb=(w,h,d,mt,x,y,z,rx=0)=>{const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mt);o.position.set(x,y,z);if(rx)o.rotation.x=rx;o.castShadow=true;g.add(o);};const mr=(rad,len,mt,x,y,z)=>{const o=new THREE.Mesh(new THREE.CylinderGeometry(rad,rad,len,16,1,false,0,Math.PI),mt);o.rotation.set(Math.PI/2,0,Math.PI/2);o.position.set(x,y,z);o.castShadow=true;g.add(o);};const ml=(mt,x,y,z)=>{const o=new THREE.Mesh(new THREE.SphereGeometry(0.2,8,8),mt);o.position.set(x,y,z);g.add(o);};const by=0.8;const wg=new THREE.CylinderGeometry(0.6,0.6,0.5,16);[[-1.2,1.2],[1.2,1.2],[-1.2,-1.2],[1.2,-1.2]].forEach(p=>{const w=new THREE.Mesh(wg,r);w.rotation.z=Math.PI/2;w.position.set(p[0],0.6,p[1]);w.castShadow=true;g.add(w);});if(t==='sport'){mb(2.4,0.8,4.2,p,0,by,0);mr(1.1,2.2,p,0,by+0.4,-0.3);mb(2.0,0.1,1.0,gl,0,by+0.65,0.6,-Math.PI/6);mb(2.4,0.2,0.6,p,0,by+0.7,-1.8);ml(ly,-0.8,by,2.2);ml(ly,0.8,by,2.2);ml(lr,-0.8,by+0.1,-2.2);ml(lr,0.8,by+0.1,-2.2);}else if(t==='ambulance'){mb(2.4,1.2,1.5,p,0,by+0.2,1.7);mr(1.2,1.5,p,0,by+0.8,1.7);mb(2.1,0.6,0.1,gl,0,by+0.9,2.35,-Math.PI/12);mb(2.5,2.5,3.2,p,0,by+0.85,-0.7);const wm=new THREE.MeshLambertMaterial({color:0xffffff});mb(0.5,1.4,0.1,wm,0,by+0.85,-2.35);mb(1.4,0.5,0.1,wm,0,by+0.85,-2.35);ml(ly,-0.9,by,2.4);ml(ly,0.9,by,2.4);
-                    // *** FIX: ROTATE AMBULANCE 180 ***
+                    // AMBULANCE ROTATION FIX
                     g.rotation.y = Math.PI; 
                 }else{const co=t==='police'?new THREE.MeshLambertMaterial({color:0x111111}):p;mb(2.4,1.0,4.0,co,0,by,0);mr(1.2,2.5,co,0,by+0.5,-0.2);mb(2.1,0.5,0.8,gl,0,by+0.6,0.6,-Math.PI/8);ml(ly,-0.8,by,2.1);ml(ly,0.8,by,2.1);if(t==='police'){const b=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.15,0.25),m);b.position.set(0,by+1.75,-0.2);b.add(new THREE.Mesh(new THREE.SphereGeometry(0.2),lr).translatex(-0.4));b.add(new THREE.Mesh(new THREE.SphereGeometry(0.2),new THREE.MeshLambertMaterial({color:0x0000ff})).translatex(0.4));g.add(b);}}g.scale.set(1.4,1.4,1.4);return g;};
 
@@ -307,15 +226,16 @@ textureLoader.load(
                     let tr = 0, tt = 0;
                     const tilt = btRef.current.tilt;
 
-                    // --- SENSITIVITY FIX ---
-                    const DEADZONE = 1.5;
-                    const SENSITIVITY = 0.04; // Adjust for responsiveness
+                    // --- ANGLE TUNING ---
+                    // Tilt is now in DEGREES (-90 to +90).
+                    const DEADZONE = 5.0; // Needs 5 degrees to start turning
+                    const SENSITIVITY = 0.02; // Multiplier for degrees
+                    
                     let steer = 0;
                     
                     if (keys['a'] || keys['ArrowLeft']) steer = -0.5;
                     else if (keys['d'] || keys['ArrowRight']) steer = 0.5;
                     else if (Math.abs(tilt) > DEADZONE) {
-                         // Exponential curve for smoother center
                          let val = (Math.abs(tilt) - DEADZONE);
                          steer = Math.sign(tilt) * val * SENSITIVITY;
                     }
@@ -348,7 +268,7 @@ textureLoader.load(
                     if(spawnTimer > spawnRate) { 
                         spawnTimer = 0; const r = Math.random(); let type = 'sedan'; let col = 0x555555;
                         if(r<0.2) type='police'; else if(r<0.4) { type='ambulance'; col=0xFF0000; } else if(r<0.6) type='sport'; else col = [0xAA0000, 0x0000AA, 0x228B22, 0xFF8C00, 0x8A2BE2, 0x00FFFF, 0x32CD32][Math.floor(Math.random()*7)];
-                        const c = createCar(type, col); c.position.set(LANES[Math.floor(Math.random()*3)], 0, -250); if (type !== 'ambulance') {c.rotation.y = Math.PI;} = Math.PI;
+                        const c = createCar(type, col); c.position.set(LANES[Math.floor(Math.random()*3)], 0, -250); c.rotation.y = Math.PI;
                         scene.add(c); gameStateRef.current.opponents.push({ mesh: c, laneIdx: Math.floor(Math.random()*3) });
                     }
                     const ops = gameStateRef.current.opponents;
@@ -358,17 +278,10 @@ textureLoader.load(
                              const next = opp.laneIdx + (Math.random()>0.5?1:-1); if(next>=0 && next<=2) opp.laneIdx = next;
                         }
                         const targetX = LANES[opp.laneIdx]; const dx = targetX - opp.mesh.position.x;
-                            if (!crashTriggeredRef.current &&
-                                Math.abs(opp.mesh.position.z) < 4.0 &&
-                                Math.abs(playerCar.position.x - opp.mesh.position.x) < 3.) 
-                            {
-                                sendVibration();
-                            
-                                setTimeout(() => {
-                                    setGameOver(true);
-                                    gameStateRef.current.isGameOver = true;
-                                }, 120);
-                            }
+                        if(Math.abs(dx) > 0.1) { opp.mesh.position.x += dx * 0.03; opp.mesh.rotation.y = Math.PI + (dx>0?-0.1:0.1); } else opp.mesh.rotation.y = Math.PI;
+                        if (Math.abs(opp.mesh.position.z) < 4.0 && Math.abs(playerCar.position.x - opp.mesh.position.x) < 3.0) {
+                            sendVibration(); 
+                            setGameOver(true); gameStateRef.current.isGameOver = true; 
                             const h = localStorage.getItem('blockyRacerHighScore') ? parseInt(localStorage.getItem('blockyRacerHighScore')) : 0;
                             if (gameStateRef.current.score > h) { localStorage.setItem('blockyRacerHighScore', gameStateRef.current.score); setHighScore(gameStateRef.current.score); setNewRecord(true); } else setNewRecord(false);
                         }
@@ -425,6 +338,7 @@ textureLoader.load(
                         <div id="overlayScreen">
                             <h1 style={{color:'#ff4444', fontSize:'80px', margin:0}}>CRASHED!</h1>
                             <p style={{fontSize:'32px'}}>Score: {score}</p>
+                            <p style={{fontSize:'16px', marginTop:'10px'}}>Press SPACE to Play Again</p>
                             {newRecord && <div style={{background:'#FFD700', color:'black', padding:'10px 20px', borderRadius:'5px', fontWeight:'bold', fontSize:'20px', marginBottom:'20px'}}>🏆 NEW HIGH SCORE! 🏆</div>}
                             <button className="big-btn" onClick={onPlayAgain}>PLAY AGAIN</button>
                         </div>
@@ -437,4 +351,3 @@ textureLoader.load(
     </script>
 </body>
 </html>
-
