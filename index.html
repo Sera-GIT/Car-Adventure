@@ -189,41 +189,20 @@
                 window.updateDebug("DISCONNECTED", 0);
             };
 
-           const sendVibration = async () => {
-                // 1. Safety Checks
-                if (!btRef.current.vibeChar) {
-                    console.error("📡 No vibration characteristic found!");
-                    return;
-                }
-                if (isVibratingRef.current) return; // Prevent spamming
-            
+           
+            const sendVibration = async () => {
+                if (!btRef.current.vibeChar || isVibratingRef.current) return;
+                
                 isVibratingRef.current = true;
-            
                 try {
-                    console.log("💥 CRASH DETECTED: Sending vibration...");
-                    const data = new Uint8Array([1]); // Raw byte 1
-            
-                    // 2. Try the modern 'Without Response' method (fastest)
-                    try {
-                        await btRef.current.vibeChar.writeValueWithoutResponse(data);
-                    } catch (e) {
-                        // 3. Fallback to standard write if 'Without Response' isn't supported
-                        await btRef.current.vibeChar.writeValue(data);
-                    }
-                    
-                    console.log("✅ Vibration signal sent!");
-                } catch (error) {
-                    console.error("❌ Bluetooth Write Failed:", error);
-                    // If GATT fails, we might need to reconnect
-                    if (error.message.includes('GATT')) {
-                        setBtConnected(false);
-                    }
+                    const data = new Uint8Array([1]);
+                    // Windows Edge/Chrome compatibility: Use writeValueWithResponse
+                    await btRef.current.vibeChar.writeValueWithResponse(data);
+                    console.log("✅ Vibe confirmed");
+                } catch (err) {
+                    console.error("Vibe Error:", err);
                 }
-            
-                // 4. Reset flag after 1 second so we can vibrate again later
-                setTimeout(() => {
-                    isVibratingRef.current = false;
-                }, 1000);
+                setTimeout(() => { isVibratingRef.current = false; }, 1000);
             };
 
             const toggleMenu = () => { if (gameOver || !gameStarted) return; setMenuOpen(!menuOpen); gameStateRef.current.isPaused = !menuOpen; };
@@ -338,34 +317,39 @@
                     // ESP32 sends: -5 (Left), 0 (Center), 5 (Right)
                  // --- TARGET steering (slow + deliberate) ---
                     // --- TARGET steering (slow + deliberate) ---
-                    steerTarget = 0;
-                    
-                    // 1. Inputs (Prioritize Keyboard, then Bluetooth)
+       steerTarget = 0;
+
+                    // 1. Inputs (Check Keyboard first, then Bluetooth)
                     if (keys['a'] || keys['ArrowLeft']) {
-                        steerTarget = -0.4;
+                        steerTarget = -0.4; // Keyboard Left
                     } 
                     else if (keys['d'] || keys['ArrowRight']) {
-                        steerTarget = 0.4;
+                        steerTarget = 0.4;  // Keyboard Right
                     } 
-                    // This is the fix for your IMU values (-3.0 to 3.0)
-                    else if (tilt < -1.0) {
-                        steerTarget = -0.4; 
-                    } 
-                    else if (tilt > 1.0) {
-                        steerTarget = 0.4;
+                    // Handle the Bluetooth IMU values (-3.0 to 3.0)
+                    else {
+                        const tiltValue = btRef.current.tilt;
+                        
+                        if (tiltValue <= -2.0) {
+                            steerTarget = -0.4; // IMU Turn Left
+                        } 
+                        else if (tiltValue >= 2.0) {
+                            steerTarget = 0.4;  // IMU Turn Right
+                        } 
+                        else {
+                            steerTarget = 0;    // IMU Neutral / Center
+                        }
                     }
-
-                                    // 2. Smooth steering (low-pass filter)
+                    
+                    // 2. Smooth steering (Keep this low-pass filter logic)
                     steerCurrent += (steerTarget - steerCurrent) * 0.08;
                     
                     // 3. Apply movement with bounds
-                    if (
-                        (playerCar.position.x > -13 && steerCurrent < 0) ||
-                        (playerCar.position.x < 13 && steerCurrent > 0)
-                    ) {
+                    if ((playerCar.position.x > -13 && steerCurrent < 0) || 
+                        (playerCar.position.x < 13 && steerCurrent > 0)) {
                         playerCar.position.x += steerCurrent;
                     }
-                    
+                                        
                     // 4. Gentle visual rotation
                     tr = -steerCurrent * 0.25;
                     tt = -steerCurrent * 0.15;
@@ -472,6 +456,7 @@
     </script>
 </body>
 </html>
+
 
 
 
