@@ -1,450 +1,359 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Blocky Racer: Ultimate</title>
-    <style>
-        body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Segoe UI', sans-serif; }
-        
-        /* HUD & UI */
-        #hud { position: absolute; top: 20px; right: 20px; color: white; text-shadow: 2px 2px 4px #000; z-index: 10; pointer-events: none; text-align: right; }
-        #debug-panel { position: fixed; bottom: 10px; left: 10px; color: lime; font-family: monospace; font-size: 12px; z-index: 999; opacity: 0.7; pointer-events: none;}
-        
-        #overlayScreen { 
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-            background: rgba(10, 15, 20, 0.9); 
-            display: flex; flex-direction: column; justify-content: center; align-items: center; 
-            z-index: 50; color: white; backdrop-filter: blur(5px);
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blocky Racer</title>
 
-        .title { font-size: 80px; font-weight: 900; color: #fff; text-shadow: 0 0 20px #00ffcc; font-style: italic; letter-spacing: -2px; margin-bottom: 0px;}
-        .subtitle { font-size: 24px; color: #00ffcc; letter-spacing: 5px; margin-bottom: 40px; text-transform: uppercase;}
-        
-        button { border: none; outline: none; transition: transform 0.1s, box-shadow 0.1s; font-family: inherit; }
-        button:active { transform: scale(0.95); }
+<style>
+body { margin: 0; overflow: hidden; background: #000; font-family: Arial, sans-serif; }
 
-        .big-btn { 
-            padding: 20px 80px; font-size: 32px; font-weight: bold;
-            background: linear-gradient(45deg, #4CAF50, #81C784); 
-            color: white; border-radius: 50px; cursor: pointer; margin-top: 20px; 
-            box-shadow: 0 10px 30px rgba(76, 175, 80, 0.4); 
-        }
-        
-        .bt-btn { 
-            padding: 15px 40px; font-size: 18px; 
-            background: #333; border: 2px solid #555; 
-            color: #ddd; border-radius: 30px; cursor: pointer; margin-top: 20px; display: flex; align-items: center; gap: 10px; 
-        }
-        .bt-btn.connected { border-color: #00ffcc; color: #00ffcc; background: rgba(0, 255, 204, 0.1); }
-        
-        /* Menu */
-        #menuBtn { position: absolute; top: 20px; left: 20px; background: rgba(255,255,255,0.2); color: white; padding: 10px 15px; border-radius: 8px; cursor: pointer; z-index: 20; font-weight: bold; backdrop-filter: blur(4px); }
-        
-        #sideMenu { position: absolute; top: 0; left: -350px; width: 300px; height: 100%; background: #1a1a1a; color: white; z-index: 100; padding: 30px; transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 5px 0 20px rgba(0,0,0,0.5); }
-        #sideMenu.open { left: 0; }
-        .menu-opt { padding: 15px; background: #2a2a2a; margin-bottom: 10px; border-radius: 8px; cursor: pointer; text-align: center; border: 1px solid #444; }
-        .menu-opt:hover { background: #333; }
-        .menu-opt.active { background: #00ffcc; color: #000; border-color: #00ffcc; font-weight: bold; }
+#debug-panel {
+  position: fixed; top: 10px; left: 10px; width: 250px;
+  background: rgba(0,0,0,0.8); color: #0f0;
+  padding: 15px; border: 2px solid #0f0;
+  font-family: monospace; z-index: 10000;
+}
 
-    </style>
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+#loader {
+  position: absolute; inset: 0;
+  background: #000; color: white;
+  display: flex; justify-content: center; align-items: center;
+  z-index: 999; transition: opacity 0.5s;
+}
+
+#hud {
+  position: absolute; top: 20px; right: 20px;
+  color: white; text-shadow: 2px 2px 4px #000;
+  z-index: 10; pointer-events: none; text-align: right;
+}
+
+#menuBtn {
+  position: absolute; bottom: 20px; right: 20px;
+  background: rgba(0,0,0,0.6); color: white;
+  border: 2px solid white;
+  padding: 10px 20px;
+  font-size: 18px; font-weight: bold;
+  cursor: pointer; z-index: 20;
+  border-radius: 5px;
+}
+
+#sideMenu {
+  position: absolute; top: 0; right: -350px;
+  width: 300px; height: 100%;
+  background: rgba(0,0,0,0.95); color: white;
+  z-index: 100; padding: 30px;
+  box-sizing: border-box;
+  transition: right 0.3s ease-out;
+  display: flex; flex-direction: column;
+}
+
+#sideMenu.open { right: 0; }
+
+.menu-opt {
+  margin: 10px 0;
+  padding: 15px;
+  background: #333;
+  cursor: pointer;
+  border: 1px solid #555;
+  text-align: center;
+  border-radius: 5px;
+}
+
+.menu-opt.active {
+  background: #4CAF50;
+  font-weight: bold;
+}
+
+#overlayScreen {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,0.85);
+  display: flex; flex-direction: column;
+  justify-content: center; align-items: center;
+  z-index: 50; color: white;
+}
+
+.big-btn {
+  padding: 20px 60px;
+  font-size: 32px;
+  background: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  margin-top: 20px;
+}
+
+.bt-btn {
+  padding: 15px 40px;
+  font-size: 20px;
+  background: #2196F3;
+  color: white;
+  border: none;
+  border-radius: 30px;
+  cursor: pointer;
+  margin-top: 20px;
+}
+
+.bt-btn.connected {
+  background: #607D8B;
+  cursor: default;
+}
+</style>
+
+<script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
+
 <body>
-    <div id="debug-panel">BLE: <span id="ble-stat">Waiting</span> | ANGLE: <span id="tilt-val">0</span>°</div>
-    <div id="root"></div>
 
-    <script type="text/babel">
-        const { useEffect, useRef, useState } = React;
+<div id="debug-panel">
+  <div>STATUS: <span id="st">DISCONNECTED</span></div>
+  <div>TILT X: <span id="tx">0.00</span></div>
+</div>
 
-        const BlockyCarGame = () => {
-            const mountRef = useRef(null);
-            
-            // Game State
-            const [gameStarted, setGameStarted] = useState(false);
-            const [gameOver, setGameOver] = useState(false);
-            const [score, setScore] = useState(0);
-            const [highScore, setHighScore] = useState(0);
-            const [menuOpen, setMenuOpen] = useState(false);
-            const [btConnected, setBtConnected] = useState(false);
-            
-            // Refs for Logic (Mutable without re-renders)
-            const btRef = useRef({ device: null, server: null, vibeChar: null, angle: 0 });
-            const gameStateRef = useRef({ 
-                isGameOver: false, isPaused: false, score: 0, 
-                speed: 0, laneSwitchProb: 0, spawnRate: 0, opponents: [], 
-                gridRows: [] 
-            });
+<div id="loader">Loading Assets...</div>
+<div id="root"></div>
 
-            const SERVICE_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214";
-            const SENSOR_CHAR_UUID = "19b10001-e8f2-537e-4f6c-d104768a1214";
-            const VIBE_CHAR_UUID = "19b10002-e8f2-537e-4f6c-d104768a1214";
+<script type="text/babel">
+const { useRef, useEffect, useState } = React;
 
-            useEffect(() => {
-                const saved = localStorage.getItem('blockyHighScore');
-                if (saved) setHighScore(parseInt(saved));
-            }, []);
+const SERVICE_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214";
+const SENSOR_CHAR_UUID = "19b10001-e8f2-537e-4f6c-d104768a1214";
+const VIBE_CHAR_UUID   = "19b10002-e8f2-537e-4f6c-d104768a1214";
 
-            // --- BLUETOOTH HANDLING ---
-            const connectBluetooth = async () => {
-                try {
-                    document.getElementById('ble-stat').innerText = "Scanning...";
-                    const device = await navigator.bluetooth.requestDevice({
-                        filters: [{ services: [SERVICE_UUID] }]
-                    });
+function BlockyCarGame() {
+  const mountRef = useRef(null);
 
-                    device.addEventListener('gattserverdisconnected', () => {
-                        setBtConnected(false);
-                        document.getElementById('ble-stat').innerText = "Disconnected";
-                    });
+  const btRef = useRef({
+    device: null,
+    sensorChar: null,
+    vibeChar: null,
+    tilt: 0
+  });
 
-                    const server = await device.gatt.connect();
-                    const service = await server.getPrimaryService(SERVICE_UUID);
-                    
-                    // Setup Sensor (Tilt)
-                    const sensorChar = await service.getCharacteristic(SENSOR_CHAR_UUID);
-                    await sensorChar.startNotifications();
-                    sensorChar.addEventListener('characteristicvaluechanged', (e) => {
-                        const decoder = new TextDecoder('utf-8');
-                        const val = parseFloat(decoder.decode(e.target.value));
-                        if (!isNaN(val)) {
-                            btRef.current.angle = val;
-                            document.getElementById('tilt-val').innerText = val.toFixed(1);
-                        }
-                    });
+  const crashTriggeredRef = useRef(false);
 
-                    // Setup Vibe
-                    const vibeChar = await service.getCharacteristic(VIBE_CHAR_UUID);
-                    
-                    btRef.current = { device, server, vibeChar, angle: 0 };
-                    setBtConnected(true);
-                    document.getElementById('ble-stat').innerText = "Connected";
-                } catch (err) {
-                    console.error("BLE Error", err);
-                    alert("Bluetooth Connection Failed");
-                }
-            };
+  const [gameStarted, setGameStarted] = useState(false);
+  const [gameOver, setGameOver] = useState(false);
+  const [score, setScore] = useState(0);
+  const [btConnected, setBtConnected] = useState(false);
 
-            const triggerVibration = async () => {
-                if (btRef.current.vibeChar) {
-                    try {
-                        const encoder = new TextEncoder();
-                        // Send simple '1' byte to trigger
-                        await btRef.current.vibeChar.writeValue(encoder.encode("1"));
-                    } catch (e) { console.error("Vibe fail", e); }
-                }
-            };
+  /* ---------------- BLE ---------------- */
 
-            // --- THREE.JS SCENE SETUP ---
-            useEffect(() => {
-                if (!mountRef.current) return;
+  const connectBluetooth = async () => {
+    const device = await navigator.bluetooth.requestDevice({
+      filters: [{ services: [SERVICE_UUID] }]
+    });
 
-                const scene = new THREE.Scene();
-                scene.background = new THREE.Color(0x87CEEB);
-                scene.fog = new THREE.Fog(0x87CEEB, 20, 300);
+    device.addEventListener("gattserverdisconnected", () => {
+      setBtConnected(false);
+      document.getElementById("st").innerText = "DISCONNECTED";
+    });
 
-                const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-                camera.position.set(0, 10, 35);
-                
-                const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-                renderer.setSize(window.innerWidth, window.innerHeight);
-                renderer.shadowMap.enabled = true;
-                renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-                mountRef.current.appendChild(renderer.domElement);
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService(SERVICE_UUID);
 
-                // Lighting
-                const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
-                scene.add(hemiLight);
-                const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
-                dirLight.position.set(50, 100, 50);
-                dirLight.castShadow = true;
-                dirLight.shadow.mapSize.width = 2048;
-                dirLight.shadow.mapSize.height = 2048;
-                scene.add(dirLight);
+    const sensorChar = await service.getCharacteristic(SENSOR_CHAR_UUID);
+    await sensorChar.startNotifications();
 
-                // --- ASSET CREATORS ---
+    sensorChar.addEventListener("characteristicvaluechanged", e => {
+      const v = parseFloat(new TextDecoder().decode(e.target.value));
+      if (!isNaN(v)) {
+        btRef.current.tilt = v;
+        document.getElementById("tx").innerText = v.toFixed(2);
+      }
+    });
 
-                // Helper: Create Box
-                const mkBox = (w,h,d,c,x,y,z,rx=0,ry=0) => {
-                    const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshLambertMaterial({color:c}));
-                    m.position.set(x,y,z);
-                    m.rotation.set(rx,ry,0);
-                    m.castShadow = true; m.receiveShadow = true;
-                    return m;
-                };
+    const vibeChar = await service.getCharacteristic(VIBE_CHAR_UUID);
 
-                // Car Generator (Fixed Ambulance, Vibrant Colors)
-                const createCar = (type) => {
-                    const carGroup = new THREE.Group();
-                    
-                    // Vibrant Colors only (No grays)
-                    const colors = [0xFF0000, 0x0066FF, 0x00CC44, 0xFF9900, 0x9933FF, 0xFF00CC];
-                    const mainColor = type === 'player' ? 0xFF0055 : 
-                                      type === 'ambulance' ? 0xFFFFFF :
-                                      type === 'police' ? 0x111111 : 
-                                      colors[Math.floor(Math.random() * colors.length)];
-                    
-                    const matBody = new THREE.MeshLambertMaterial({color: mainColor});
-                    const matWin = new THREE.MeshLambertMaterial({color: 0x333333});
-                    const matLight = new THREE.MeshLambertMaterial({color: 0xFFFF00});
-                    const matRed = new THREE.MeshLambertMaterial({color: 0xFF0000});
+    btRef.current = { device, sensorChar, vibeChar, tilt: 0 };
+    setBtConnected(true);
+    document.getElementById("st").innerText = "CONNECTED";
+  };
 
-                    // Wheels
-                    const wheelGeo = new THREE.CylinderGeometry(0.6, 0.6, 0.5, 12);
-                    const wheelMat = new THREE.MeshLambertMaterial({color: 0x222222});
-                    const wheels = [[-1.2, 1.2], [1.2, 1.2], [-1.2, -1.2], [1.2, -1.2]];
-                    wheels.forEach(pos => {
-                        const w = new THREE.Mesh(wheelGeo, wheelMat);
-                        w.rotation.z = Math.PI/2;
-                        w.position.set(pos[0], 0.6, pos[1]);
-                        carGroup.add(w);
-                    });
+  const sendVibration = async () => {
+    if (!btRef.current.vibeChar) return;
+    if (crashTriggeredRef.current) return;
 
-                    const chassis = new THREE.Group();
+    crashTriggeredRef.current = true;
+    await btRef.current.vibeChar.writeValue(
+      new TextEncoder().encode("1")
+    );
+  };
 
-                    if (type === 'ambulance') {
-                        // AMBULANCE: Boxy shape
-                        // IMPORTANT: We build it facing "forward" relative to the chassis group
-                        const body = mkBox(2.4, 1.4, 4.0, 0xFFFFFF, 0, 1.4, 0); // Main box
-                        const cab = mkBox(2.2, 0.8, 1.2, 0xFFFFFF, 0, 1.1, -2.0); // Front Cab
-                        const win = mkBox(2.0, 0.6, 0.1, 0x222222, 0, 1.3, -2.6); // Windshield
-                        
-                        // Cross
-                        const c1 = mkBox(1.2, 0.3, 0.1, 0xFF0000, 0, 1.4, 2.01);
-                        const c2 = mkBox(0.3, 1.2, 0.1, 0xFF0000, 0, 1.4, 2.01);
+  /* ---------------- THREE ---------------- */
 
-                        // Siren
-                        const s1 = mkBox(0.4, 0.2, 0.4, 0xFF0000, -0.6, 2.2, -1.5);
-                        const s2 = mkBox(0.4, 0.2, 0.4, 0x0000FF, 0.6, 2.2, -1.5);
+  useEffect(() => {
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x87CEEB);
 
-                        chassis.add(body, cab, win, c1, c2, s1, s2);
-                        
-                        // FIX: Ambulance needs to be flipped 180 to face traffic flow properly
-                        chassis.rotation.y = Math.PI; 
+    const camera = new THREE.PerspectiveCamera(
+      60, window.innerWidth / window.innerHeight, 0.1, 1000
+    );
 
-                    } else if (type === 'police') {
-                        // Police
-                        const body = mkBox(2.4, 0.8, 4.2, 0x111111, 0, 1.0, 0);
-                        const top = mkBox(2.0, 0.6, 2.0, 0xFFFFFF, 0, 1.7, -0.2);
-                        const sirenBar = mkBox(1.5, 0.1, 0.3, 0x555555, 0, 2.05, -0.2);
-                        sirenBar.add(mkBox(0.4, 0.2, 0.3, 0xFF0000, -0.5, 0, 0));
-                        sirenBar.add(mkBox(0.4, 0.2, 0.3, 0x0000FF, 0.5, 0, 0));
-                        chassis.add(body, top, sirenBar);
-                    } else {
-                        // Generic Sport/Sedan
-                        const body = mkBox(2.4, 0.7, 4.2, matBody, 0, 1.0, 0);
-                        const cabin = mkBox(1.9, 0.6, 2.2, 0x222222, 0, 1.6, -0.3); // Dark windows
-                        const roof = mkBox(2.0, 0.05, 1.8, matBody, 0, 1.95, -0.3);
-                        chassis.add(body, cabin, roof);
-                        
-                        // Headlights
-                        const hl = mkBox(0.5, 0.2, 0.1, matLight, -0.8, 1.1, -2.15);
-                        const hr = mkBox(0.5, 0.2, 0.1, matLight, 0.8, 1.1, -2.15);
-                        chassis.add(hl, hr);
-                    }
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    mountRef.current.appendChild(renderer.domElement);
 
-                    carGroup.add(chassis);
-                    carGroup.castShadow = true;
-                    return carGroup;
-                };
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 
-                // Create Player
-                const playerCar = createCar('player');
-                scene.add(playerCar);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    dirLight.position.set(100, 150, 50);
+    scene.add(dirLight);
 
-                // Environment
-                const road = mkBox(34, 1, 1000, 0x333333, 0, -0.5, 0); 
-                scene.add(road);
-                
-                const grassL = mkBox(400, 1, 1000, 0x2E7D32, -220, -0.5, 0);
-                const grassR = mkBox(400, 1, 1000, 0x2E7D32, 220, -0.5, 0);
-                scene.add(grassL, grassR);
+    const road = new THREE.Mesh(
+      new THREE.PlaneGeometry(30, 1000),
+      new THREE.MeshLambertMaterial({ color: 0x444444 })
+    );
+    road.rotation.x = -Math.PI / 2;
+    scene.add(road);
 
-                // Grid Logic
-                const createEnvironmentObj = (z) => {
-                    const group = new THREE.Group();
-                    // Simple trees/buildings
-                    const makeTree = (x) => {
-                        const g = new THREE.Group();
-                        g.add(mkBox(1,3,1,0x5D4037, x, 1.5, 0));
-                        g.add(mkBox(4,4,4,0x1B5E20, x, 4, 0));
-                        return g;
-                    }
-                    group.add(makeTree(-25), makeTree(25));
-                    group.position.z = z;
-                    return group;
-                }
+    const playerCar = new THREE.Mesh(
+      new THREE.BoxGeometry(2, 1, 4),
+      new THREE.MeshLambertMaterial({ color: 0xFF0055 })
+    );
+    playerCar.position.y = 0.6;
+    scene.add(playerCar);
 
-                const rows = [];
-                for(let i=0; i<40; i++) {
-                    const row = createEnvironmentObj(-300 + (i*30));
-                    scene.add(row);
-                    rows.push({mesh: row, z: row.position.z});
-                }
-                gameStateRef.current.gridRows = rows;
+    const opponents = [];
+    const LANES = [-10, 0, 10];
+    let speed = 0;
 
-                // --- GAME LOOP ---
-                let currentRot = 0;
-                const animate = () => {
-                    requestAnimationFrame(animate);
+    function createOpponent(type, color) {
+      const car = new THREE.Mesh(
+        new THREE.BoxGeometry(2, 1, 4),
+        new THREE.MeshLambertMaterial({ color })
+      );
+      car.position.y = 0.6;
 
-                    if (!gameStateRef.current.gameStarted || gameStateRef.current.isGameOver || gameStateRef.current.isPaused) {
-                        renderer.render(scene, camera);
-                        return;
-                    }
+      if (type === "ambulance") {
+        car.rotation.y = Math.PI;
+      }
+      return car;
+    }
 
-                    // 1. INPUT HANDLING (New Angle Logic)
-                    let steerInput = 0;
-                    const tilt = btRef.current.angle; // Now in DEGREES (-90 to 90)
+    function animate() {
+      requestAnimationFrame(animate);
 
-                    // Keyboard fallback
-                    /* if (keys['ArrowLeft']) steerInput = -20;
-                    else if (keys['ArrowRight']) steerInput = 20;
-                    else */ 
-                    
-                    if (Math.abs(tilt) > 2.0) { // Deadzone of 2 degrees
-                        steerInput = tilt; 
-                        // Clamp max steering visual
-                        if (steerInput > 35) steerInput = 35;
-                        if (steerInput < -35) steerInput = -35;
-                    }
+      if (!gameStarted || gameOver) {
+        renderer.render(scene, camera);
+        return;
+      }
 
-                    // Map Input to Movement
-                    // Left tilt (negative angle) -> Move Left (Negative X)
-                    // We divide by 40 to control sensitivity
-                    const moveDelta = (steerInput * -1) * 0.02; 
-                    
-                    playerCar.position.x += moveDelta;
-                    
-                    // Constrain road bounds
-                    if(playerCar.position.x < -14) playerCar.position.x = -14;
-                    if(playerCar.position.x > 14) playerCar.position.x = 14;
+      speed = Math.min(speed + 0.02, 0.9);
+      setScore(s => s + 1);
 
-                    // Visual Car Tilt
-                    currentRot += ((steerInput * -0.02) - currentRot) * 0.1; 
-                    playerCar.rotation.y = currentRot;
-                    playerCar.rotation.z = (steerInput * -0.01);
+      /* -------- TILT FIX (ONLY LOGIC CHANGE) -------- */
+      const DEADZONE = 5;
+      const MAX_TILT = 25;
+      const MAX_STEER = 0.7;
 
-                    // Camera Follow
-                    camera.position.x = playerCar.position.x * 0.5;
-                    camera.lookAt(playerCar.position.x * 0.2, 2, -100);
+      let steer = 0;
+      const tilt = btRef.current.tilt;
 
-                    // 2. SPEED & SPAWNING
-                    let speed = gameStateRef.current.speed;
-                    if (speed < 1.0) speed += 0.005; // Accelerate
-                    gameStateRef.current.speed = speed;
-                    
-                    gameStateRef.current.score += 1;
-                    setScore(Math.floor(gameStateRef.current.score / 10));
+      if (Math.abs(tilt) > DEADZONE) {
+        let n = (Math.abs(tilt) - DEADZONE) / (MAX_TILT - DEADZONE);
+        n = Math.min(n, 1);
+        steer = Math.sign(tilt) * n * n * MAX_STEER;
+      }
 
-                    // Move Environment
-                    gameStateRef.current.gridRows.forEach(row => {
-                        row.z += speed;
-                        if (row.z > 50) row.z = -1150; // Loop back
-                        row.mesh.position.z = row.z;
-                    });
+      playerCar.position.x = THREE.MathUtils.clamp(
+        playerCar.position.x + steer,
+        -13, 13
+      );
 
-                    // Spawn Traffic
-                    if (Math.random() < 0.02) { // Random spawn chance
-                        const lanes = [-10, 0, 10];
-                        const lane = lanes[Math.floor(Math.random() * 3)];
-                        
-                        const r = Math.random();
-                        const type = r < 0.2 ? 'ambulance' : r < 0.4 ? 'police' : 'sedan';
-                        
-                        const enemy = createCar(type);
-                        enemy.position.set(lane, 0, -300);
-                        // Enemy faces player
-                        // enemy.rotation.y = Math.PI; // Standard cars face back
-                        scene.add(enemy);
-                        gameStateRef.current.opponents.push(enemy);
-                    }
+      /* -------- SPAWN -------- */
+      if (Math.random() < 0.02) {
+        const type = Math.random() < 0.3 ? "ambulance" : "car";
+        const color = type === "ambulance" ? 0xff0000 : 0x00aaff;
+        const c = createOpponent(type, color);
+        c.position.z = -250;
+        c.position.x = LANES[Math.floor(Math.random() * 3)];
 
-                    // 3. COLLISION CHECK
-                    const opponents = gameStateRef.current.opponents;
-                    for (let i = opponents.length - 1; i >= 0; i--) {
-                        const enemy = opponents[i];
-                        enemy.position.z += (speed * 0.8); // They move slower than world
+        if (type !== "ambulance") {
+          c.rotation.y = Math.PI;
+        }
 
-                        // Hitbox
-                        if (Math.abs(enemy.position.z) < 4 && Math.abs(enemy.position.x - playerCar.position.x) < 2.5) {
-                            // CRASH!
-                            setGameOver(true);
-                            gameStateRef.current.isGameOver = true;
-                            triggerVibration(); // Send command to Arduino
-                            
-                            if (score > highScore) {
-                                setHighScore(score);
-                                localStorage.setItem('blockyHighScore', score);
-                            }
-                        }
+        scene.add(c);
+        opponents.push(c);
+      }
 
-                        // Cleanup
-                        if (enemy.position.z > 50) {
-                            scene.remove(enemy);
-                            opponents.splice(i, 1);
-                        }
-                    }
+      /* -------- UPDATE -------- */
+      for (let i = opponents.length - 1; i >= 0; i--) {
+        const c = opponents[i];
+        c.position.z += speed + 0.6;
 
-                    renderer.render(scene, camera);
-                };
+        if (
+          !crashTriggeredRef.current &&
+          Math.abs(c.position.z) < 4 &&
+          Math.abs(playerCar.position.x - c.position.x) < 3
+        ) {
+          sendVibration();
+          setTimeout(() => setGameOver(true), 120);
+        }
 
-                animate();
+        if (c.position.z > 80) {
+          scene.remove(c);
+          opponents.splice(i, 1);
+        }
+      }
 
-                // Restart Logic
-                window.resetGame = () => {
-                    setGameOver(false);
-                    setScore(0);
-                    gameStateRef.current.score = 0;
-                    gameStateRef.current.speed = 0;
-                    gameStateRef.current.isGameOver = false;
-                    playerCar.position.x = 0;
-                    
-                    // Clear Enemies
-                    gameStateRef.current.opponents.forEach(o => scene.remove(o));
-                    gameStateRef.current.opponents = [];
-                };
+      camera.position.set(
+        playerCar.position.x * 0.6, 10, 35
+      );
+      camera.lookAt(playerCar.position.x * 0.3, 2, -50);
 
-                return () => { mountRef.current.innerHTML = ''; };
-            }, []);
+      renderer.render(scene, camera);
+    }
 
-            return (
-                <div style={{width: '100%', height: '100%'}}>
-                    <div id="menuBtn" onClick={() => setMenuOpen(!menuOpen)}>|| MENU</div>
-                    
-                    {/* HUD */}
-                    {gameStarted && <div id="hud">
-                        <div style={{fontSize:'40px', fontWeight:'900'}}>SCORE: {score}</div>
-                    </div>}
+    animate();
+    document.getElementById("loader").style.display = "none";
+  }, [gameStarted, gameOver]);
 
-                    {/* OVERLAYS */}
-                    {!gameStarted && (
-                        <div id="overlayScreen">
-                            <div className="title">BLOCKY RACER</div>
-                            <div className="subtitle">Bluetooth Tilt Edition</div>
-                            <button className={`bt-btn ${btConnected?'connected':''}`} onClick={!btConnected ? connectBluetooth : null}>
-                                {btConnected ? "CONTROLLER CONNECTED" : "CONNECT CONTROLLER"}
-                            </button>
-                            <button className="big-btn" onClick={() => { setGameStarted(true); gameStateRef.current.gameStarted = true; }}>START GAME</button>
-                        </div>
-                    )}
+  const restartGame = () => {
+    crashTriggeredRef.current = false;
+    setScore(0);
+    setGameOver(false);
+  };
 
-                    {gameOver && (
-                        <div id="overlayScreen">
-                            <h1 style={{color: '#ff4444', fontSize: '100px', margin: 0, textShadow: '0 0 30px red'}}>CRASHED</h1>
-                            <h2 style={{marginTop: 0}}>Final Score: {score}</h2>
-                            <button className="big-btn" onClick={window.resetGame}>RESTART RACE</button>
-                        </div>
-                    )}
-                </div>
-            );
-        };
+  return (
+    <>
+      <div ref={mountRef} style={{ width: "100vw", height: "100vh" }} />
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<BlockyCarGame />);
-    </script>
+      {!gameStarted && (
+        <div id="overlayScreen">
+          <h1>BLOCKY RACER</h1>
+          <button
+            className={"bt-btn " + (btConnected ? "connected" : "")}
+            onClick={!btConnected ? connectBluetooth : null}
+          >
+            {btConnected ? "✓ PAIRED" : "PAIR CONTROLLER"}
+          </button>
+          <button className="big-btn" onClick={() => setGameStarted(true)}>
+            START ENGINE
+          </button>
+        </div>
+      )}
+
+      {gameOver && (
+        <div id="overlayScreen">
+          <h1>CRASHED</h1>
+          <div>Score: {score}</div>
+          <button className="big-btn" onClick={restartGame}>
+            RESTART
+          </button>
+        </div>
+      )}
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root"))
+  .render(<BlockyCarGame />);
+</script>
+
 </body>
 </html>
