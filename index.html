@@ -93,7 +93,8 @@
                         console.log("═══════════════════════════════");
                         try {
                             const data = new Uint8Array([1]);
-                            await btRef.current.vibeChar.writeValueWithoutResponse(data);
+                            await btRef.current.vibeChar.writeValue(data);
+                            new Uint8Array([1])
                             console.log("✓ TEST VIBE SENT!");
                             alert("Vibration command sent! Check ESP32 serial monitor.");
                         } catch(e) { 
@@ -165,7 +166,7 @@
                     console.log("🧪 Testing vibration on connect...");
                     try {
                         const testData = new Uint8Array([1]);
-                        await vibeChar.writeValueWithoutResponse(testData);
+                        await vibeChar.writeValue(testData);
                         console.log("✓ Connection test vibration sent!");
                     } catch (e) {
                         console.warn("Connection test vibe failed:", e);
@@ -191,19 +192,23 @@
 
            
             const sendVibration = async () => {
-                if (!btRef.current.vibeChar || isVibratingRef.current) return;
+                  if (!btRef.current.vibeChar || isVibratingRef.current) return;
                 
-                isVibratingRef.current = true;
-                try {
-                    const data = new Uint8Array([1]);
-                    // Windows Edge/Chrome compatibility: Use writeValueWithResponse
-                    await btRef.current.vibeChar.writeValueWithResponse(data);
-                    console.log("✅ Vibe confirmed");
-                } catch (err) {
+                  isVibratingRef.current = true;
+                  try {
+                    await btRef.current.vibeChar.writeValue(
+                      new Uint8Array([1])
+                    );
+                    console.log("✅ Vibe sent");
+                  } catch (err) {
                     console.error("Vibe Error:", err);
-                }
-                setTimeout(() => { isVibratingRef.current = false; }, 1000);
-            };
+                  }
+                
+                  setTimeout(() => {
+                    isVibratingRef.current = false;
+                  }, 1000);
+                };
+                
 
             const toggleMenu = () => { if (gameOver || !gameStarted) return; setMenuOpen(!menuOpen); gameStateRef.current.isPaused = !menuOpen; };
             const changeDifficulty = (mode) => { gameStateRef.current.difficulty = mode; setUiDifficulty(mode); };
@@ -312,12 +317,13 @@
 
                     let tr = 0, tt = 0;
                     const tilt = btRef.current.tilt;
+                    console.log("IMU tilt:", btRef.current.tilt);
 
                     // Roll-based steering with hysteresis zones
                     // ESP32 sends: -5 (Left), 0 (Center), 5 (Right)
                  // --- TARGET steering (slow + deliberate) ---
                     // --- TARGET steering (slow + deliberate) ---
-       steerTarget = 0;
+                    steerTarget = 0;
 
                     // 1. Inputs (Check Keyboard first, then Bluetooth)
                     if (keys['a'] || keys['ArrowLeft']) {
@@ -342,8 +348,12 @@
                     }
                     
                     // 2. Smooth steering (Keep this low-pass filter logic)
-                    steerCurrent += (steerTarget - steerCurrent) * 0.08;
+                    const STEER_SMOOTH = 0.25;   // stronger response
+                    steerCurrent += (steerTarget - steerCurrent) * STEER_SMOOTH;
                     
+                    // deadzone clamp
+                    if (Math.abs(steerCurrent) < 0.01) steerCurrent = 0;
+
                     // 3. Apply movement with bounds
                     if ((playerCar.position.x > -13 && steerCurrent < 0) || 
                         (playerCar.position.x < 13 && steerCurrent > 0)) {
@@ -456,6 +466,7 @@
     </script>
 </body>
 </html>
+
 
 
 
