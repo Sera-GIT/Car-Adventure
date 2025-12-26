@@ -29,7 +29,15 @@
         #sideMenu.open { right: 0; }
         .menu-opt { margin: 10px 0; padding: 15px; background: #333; cursor: pointer; border: 1px solid #555; text-align: center; border-radius: 5px; transition: all 0.2s; }
         .menu-opt.active { background: #4CAF50; border-color: #81C784; font-weight: bold; }
-        #overlayScreen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 50; color: white; }
+
+        /* OPTIONAL: make overlay slightly less dark so you can SEE scenery behind it */
+        #overlayScreen { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.65); /* was 0.85 */
+            display: flex; flex-direction: column; justify-content: center; align-items: center; 
+            z-index: 50; color: white; 
+        }
+
         .big-btn { padding: 20px 60px; font-size: 32px; background: #4CAF50; color: white; border: none; border-radius: 10px; cursor: pointer; margin-top: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
         .bt-btn { padding: 15px 40px; font-size: 20px; background: #2196F3; color: white; border: none; border-radius: 30px; cursor: pointer; margin-top: 20px; display: flex; align-items: center; gap: 10px; }
         .bt-btn.connected { background: #607D8B; cursor: default; }
@@ -83,7 +91,8 @@
             const btRef = useRef({ device: null, server: null, sensorChar: null, vibeChar: null, tilt: 0 });
             const gameStateRef = useRef({
                 isGameOver: false, isPaused: false, score: 0,
-                movingTime: 0, totalDistance: 0, gridRows: [], opponents: [], difficulty: 'Progressive'
+                movingTime: 0, totalDistance: 0, gridRows: [], opponents: [], difficulty: 'Progressive',
+                gameStarted: false, // (tiny safety, so it's explicit)
             });
 
             const SERVICE_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214";
@@ -143,7 +152,7 @@
                     isVibratingRef.current = true;
                     try {
                         const encoder = new TextEncoder('utf-8');
-                            if (btRef.current.vibeChar.properties.writeWithoutResponse) {
+                        if (btRef.current.vibeChar.properties.writeWithoutResponse) {
                             await btRef.current.vibeChar.writeValueWithoutResponse(encoder.encode('1'));
                         } else {
                             await btRef.current.vibeChar.writeValue(encoder.encode('1'));
@@ -199,15 +208,21 @@
 
             useEffect(() => {
                 if (!mountRef.current) return;
+
                 const scene = new THREE.Scene();
                 scene.background = new THREE.Color(0x87CEEB);
                 scene.fog = new THREE.Fog(0xaaccff, 10, 280); 
+
                 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
                 const renderer = new THREE.WebGLRenderer({ antialias: true });
                 renderer.setSize(window.innerWidth, window.innerHeight);
                 renderer.shadowMap.enabled = true;
                 renderer.shadowMap.type = THREE.PCFSoftShadowMap; 
                 mountRef.current.appendChild(renderer.domElement);
+
+                // IMPORTANT: set an initial look direction so you see scenery immediately
+                camera.position.set(0, 10, 35);
+                camera.lookAt(0, 2, -50);
 
                 // --- ROBUST ASSET LOADING ---
                 const hideLoader = () => {
@@ -241,49 +256,36 @@
                     const gl=new THREE.MeshLambertMaterial({color:0x222222});
                     const r=new THREE.MeshLambertMaterial({color:0x111111});
                     
-                    // Box Helper
-                    const mb=(w,h,d,mt,x,y,z,rx=0)=>{const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mt);o.position.set(x,y,z);if(rx)o.rotation.x=rx;o.castShadow=true;g.add(o);};
-                    // Wheel Geometry
                     const wg=new THREE.CylinderGeometry(0.6,0.6,0.5,16);
-                    
-                    // Create CHASSIS GROUP for independent rotation
                     const chassis = new THREE.Group();
 
-                    // Add Wheels (Static relative to group)
                     [[-1.2,1.2],[1.2,1.2],[-1.2,-1.2],[1.2,-1.2]].forEach(pos=>{
                         const w=new THREE.Mesh(wg,r);
                         w.rotation.z=Math.PI/2; w.position.set(pos[0],0.6,pos[1]); w.castShadow=true; g.add(w);
                     });
 
-                    // Build Body Types
                     if(t==='ambulance'){
-                        // 1. ROTATE CHASSIS 180 (Fix orientation)
                         chassis.rotation.y = Math.PI; 
-                        
-                        // 2. Add Parts to Chassis
                         const body = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.4, 4.0), p); body.position.set(0, 1.5, 0); chassis.add(body);
                         const cab = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.8, 1.2), p); cab.position.set(0, 1.2, -2.0); chassis.add(cab);
                         const c1 = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.3, 0.1), new THREE.MeshLambertMaterial({color:0xff0000})); c1.position.set(0, 1.5, 2.05); chassis.add(c1);
                         const c2 = new THREE.Mesh(new THREE.BoxGeometry(0.3, 1.2, 0.1), new THREE.MeshLambertMaterial({color:0xff0000})); c2.position.set(0, 1.5, 2.05); chassis.add(c2);
 
                     } else if (t==='truck') {
-                        // Blue Delivery Truck
                         const cargo = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.8, 3.0), new THREE.MeshLambertMaterial({color:0x004488})); cargo.position.set(0, 1.7, 0.5); chassis.add(cargo);
                         const cab = new THREE.Mesh(new THREE.BoxGeometry(2.3, 1.2, 1.2), p); cab.position.set(0, 1.4, -1.6); chassis.add(cab);
                         
                     } else if (t==='viper') {
-                        // Yellow Sports Car
                         const body = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.7, 4.5), p); body.position.set(0, 1.0, 0); chassis.add(body);
                         const top = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.5, 1.5), gl); top.position.set(0, 1.6, 0.5); chassis.add(top);
 
                     } else {
-                        // Sedan / Police
                         const body = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.0, 4.0), p); body.position.set(0, 1.0, 0); chassis.add(body);
                         const top = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.5, 0.8), gl); top.position.set(0, 1.6, 0.6); chassis.add(top);
                         if(t==='police') {
                              const bar = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.1, 0.3), new THREE.MeshLambertMaterial({color:0x555555})); bar.position.set(0, 1.9, 0.6); chassis.add(bar);
-                             const r = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.2, 0.2), new THREE.MeshLambertMaterial({color:0xff0000})); r.position.set(-0.5, 2.0, 0.6); chassis.add(r);
-                             const b = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.2, 0.2), new THREE.MeshLambertMaterial({color:0x0000ff})); b.position.set(0.5, 2.0, 0.6); chassis.add(b);
+                             const rr = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.2, 0.2), new THREE.MeshLambertMaterial({color:0xff0000})); rr.position.set(-0.5, 2.0, 0.6); chassis.add(rr);
+                             const bb = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.2, 0.2), new THREE.MeshLambertMaterial({color:0x0000ff})); bb.position.set(0.5, 2.0, 0.6); chassis.add(bb);
                         }
                     }
 
@@ -297,7 +299,15 @@
                 road.rotation.x = -Math.PI / 2; road.receiveShadow = true; scene.add(road);
                 const grassL = new THREE.Mesh(new THREE.BoxGeometry(250, 1, 1000), new THREE.MeshLambertMaterial({ color: 0x2d5a27 })); grassL.position.set(-140, -0.6, 0); scene.add(grassL);
                 const grassR = new THREE.Mesh(new THREE.BoxGeometry(250, 1, 1000), new THREE.MeshLambertMaterial({ color: 0x2d5a27 })); grassR.position.set(140, -0.6, 0); scene.add(grassR);
-                const markings = new THREE.Group(); for(let i=-20; i<80; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.1, 4), new THREE.MeshBasicMaterial({ color: 0xFFFFFF })); m.position.set(-5, 0.05, i*10); markings.add(m.clone()); m.position.set(5, 0.05, i*10); markings.add(m); } scene.add(markings);
+                const markings = new THREE.Group(); 
+                for(let i=-20; i<80; i++) { 
+                    const m = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.1, 4), new THREE.MeshBasicMaterial({ color: 0xFFFFFF })); 
+                    m.position.set(-5, 0.05, i*10); 
+                    markings.add(m.clone()); 
+                    m.position.set(5, 0.05, i*10); 
+                    markings.add(m); 
+                } 
+                scene.add(markings);
 
                 const GRID_STEP = 30; const NUM_ROWS = 40; const START_Z = -350;
                 for (let i = 0; i < NUM_ROWS; i++) {
@@ -312,12 +322,17 @@
 
                 const keys = {}; const onKey = (e) => keys[e.key] = e.type === 'keydown';
                 window.addEventListener('keydown', onKey); window.addEventListener('keyup', onKey);
-                camera.position.set(0, 10, 35); let speed = 0; let spawnTimer = 0; let currentRot = 0, currentTilt = 0; const LANES = [-10, 0, 10];
+
+                let speed = 0; let spawnTimer = 0; let currentRot = 0, currentTilt = 0; 
+                const LANES = [-10, 0, 10];
 
                 const animate = () => {
                     requestAnimationFrame(animate);
+
+                    // ✅ FIX: ALWAYS RENDER, even when not started / paused / game over
                     if (!gameStateRef.current.gameStarted || gameStateRef.current.isGameOver || gameStateRef.current.isPaused) {
-                        if(gameStateRef.current.gameStarted) renderer.render(scene, camera); return;
+                        renderer.render(scene, camera);
+                        return;
                     }
 
                     if (speed > 0) { gameStateRef.current.movingTime += 0.016; gameStateRef.current.totalDistance += speed; }
@@ -334,7 +349,7 @@
                     if(keys['w']||keys['ArrowUp']) speed = Math.min(speed+0.025, 0.9); else speed = Math.max(speed-0.01, 0);
 
                     // --- Y-AXIS MOTION DELTA LOGIC ---
-                    const THRESHOLD = 0.5; // Change if sensitivity is off
+                    const THRESHOLD = 0.5;
                     const currentY = btRef.current.tilt; 
                     const prevY = prevTiltRef.current;
                     const delta = currentY - prevY;
@@ -342,25 +357,22 @@
                     let steer = 0;
                     let actionText = "HOLD";
 
-                    // Detect Movement Direction
                     if (delta > THRESHOLD) {
-                        steer = 0.5; // Turning One Way
+                        steer = 0.5;
                         actionText = "RIGHT >>";
                     } else if (delta < -THRESHOLD) {
-                        steer = -0.5; // Turning Other Way
+                        steer = -0.5;
                         actionText = "<< LEFT";
                     } else {
-                        steer = 0; // Released
+                        steer = 0;
                     }
 
-                    // Keyboard Fallback
                     if (keys['a'] || keys['ArrowLeft']) steer = -0.5;
                     else if (keys['d'] || keys['ArrowRight']) steer = 0.5;
 
                     window.updateDebug(null, currentY, delta, actionText);
                     prevTiltRef.current = currentY;
 
-                    // Physics
                     let tr = 0, tt = 0;
                     if (playerCar.position.x > -13 && steer < 0) {
                          playerCar.position.x += steer;
@@ -373,7 +385,8 @@
 
                     currentRot += (tr-currentRot)*0.1; currentTilt += (tt-currentTilt)*0.1;
                     playerCar.rotation.y = currentRot; playerCar.rotation.z = currentTilt;
-                    camera.position.x = playerCar.position.x * 0.6; camera.lookAt(playerCar.position.x * 0.3, 2, -50);
+                    camera.position.x = playerCar.position.x * 0.6; 
+                    camera.lookAt(playerCar.position.x * 0.3, 2, -50);
 
                     if(speed > 0) {
                         gameStateRef.current.score += 1; setScore(Math.floor(gameStateRef.current.score));
@@ -381,7 +394,8 @@
                         const isRural = Math.floor(gameStateRef.current.totalDistance / 400) % 2 === 0;
                         let minZ = 10000; gameStateRef.current.gridRows.forEach(r => minZ = Math.min(minZ, r.z));
                         gameStateRef.current.gridRows.forEach(row => {
-                            row.z += speed; if (row.z > 80) { row.z = minZ - GRID_STEP; minZ = row.z; updateRowVisuals(row, isRural); }
+                            row.z += speed; 
+                            if (row.z > 80) { row.z = minZ - GRID_STEP; minZ = row.z; updateRowVisuals(row, isRural); }
                             row.mesh.position.z = row.z;
                         });
                     }
@@ -389,12 +403,8 @@
                     const trafficSpeed = 0.6 + speed; spawnTimer += trafficSpeed;
                     if(spawnTimer > spawnRate) { 
                         spawnTimer = 0; const r = Math.random(); let type = 'sedan'; 
-                        
-                        // Vibrant Colors
                         const vibrantColors = [0xFF0000, 0x0066FF, 0x00CC44, 0xFF9900, 0x9933FF, 0xFF00CC];
                         let col = vibrantColors[Math.floor(Math.random() * vibrantColors.length)];
-
-                        // Spawning Logic
                         if(r<0.15) type='police'; 
                         else if(r<0.30) { type='ambulance'; col=0xFFFFFF; } 
                         else if(r<0.45) { type='truck'; col=0xFFFFFF; } 
@@ -402,12 +412,11 @@
                         
                         const c = createCar(type, col); 
                         c.position.set(LANES[Math.floor(Math.random()*3)], 0, -250); 
-                        
-                        // ROTATE ALL ENEMIES TO FACE PLAYER
                         c.rotation.y = Math.PI;
 
                         scene.add(c); gameStateRef.current.opponents.push({ mesh: c, laneIdx: Math.floor(Math.random()*3) });
                     }
+
                     const ops = gameStateRef.current.opponents;
                     for (let i = ops.length - 1; i >= 0; i--) {
                         const opp = ops[i]; opp.mesh.position.z += trafficSpeed;
@@ -430,16 +439,31 @@
                         }
                         if(opp.mesh.position.z > 80) { scene.remove(opp.mesh); ops.splice(i, 1); }
                     }
+
                     renderer.render(scene, camera);
                 };
                 animate();
 
-                const handleResize = () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); };
+                const handleResize = () => { 
+                    camera.aspect = window.innerWidth / window.innerHeight; 
+                    camera.updateProjectionMatrix(); 
+                    renderer.setSize(window.innerWidth, window.innerHeight); 
+                };
                 window.addEventListener('resize', handleResize);
-                return () => { window.removeEventListener('resize', handleResize); window.removeEventListener('keydown', onKey); window.removeEventListener('keyup', onKey); if(mountRef.current) mountRef.current.innerHTML = ''; };
+
+                return () => { 
+                    window.removeEventListener('resize', handleResize);
+                    window.removeEventListener('keydown', onKey); 
+                    window.removeEventListener('keyup', onKey); 
+                    if(mountRef.current) mountRef.current.innerHTML = ''; 
+                };
             }, []);
 
-            const onStartGame = () => { setGameStarted(true); gameStateRef.current.gameStarted = true; gameStateRef.current.isPaused = false; };
+            const onStartGame = () => { 
+                setGameStarted(true); 
+                gameStateRef.current.gameStarted = true; 
+                gameStateRef.current.isPaused = false; 
+            };
             const onPlayAgain = () => { triggerRestart(); };
 
             return (
@@ -467,6 +491,7 @@
                         </div>
                         <div className="menu-opt" style={{background:'#2196F3', marginTop:'auto'}} onClick={toggleMenu}>RESUME GAME</div>
                     </div>
+
                     {!gameStarted && (
                         <div id="overlayScreen">
                             <h1 style={{fontSize:'80px', margin:0, color:'#4CAF50', textShadow:'4px 4px 0 #000'}}>BLOCKY RACER</h1>
@@ -476,6 +501,7 @@
                             <button className="big-btn" onClick={onStartGame}>START ENGINE</button>
                         </div>
                     )}
+
                     {gameOver && (
                         <div id="overlayScreen">
                             <h1 style={{color:'#ff4444', fontSize:'80px', margin:0}}>CRASHED!</h1>
@@ -488,6 +514,7 @@
                 </div>
             );
         };
+
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<BlockyCarGame />);
     </script>
