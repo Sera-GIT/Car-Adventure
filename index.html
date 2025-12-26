@@ -208,7 +208,7 @@
                     console.log("╚══════════════════════════════╝");
                     
                     const data = new Uint8Array([1]);
-                    await btRef.current.vibeChar.writeValueWithoutResponse(data);
+                    await btRef.current.vibeChar.writeValue(data);
                     
                     console.log("✓ Vibration command sent successfully!");
                 } catch(e) { 
@@ -312,7 +312,7 @@
 
                 const keys = {}; const onKey = (e) => keys[e.key] = e.type === 'keydown';
                 window.addEventListener('keydown', onKey); window.addEventListener('keyup', onKey);
-                camera.position.set(0, 10, 35); let speed = 0; let spawnTimer = 0; let currentRot = 0, currentTilt = 0; const LANES = [-10, 0, 10];
+                camera.position.set(0, 10, 35); let speed = 0; let spawnTimer = 0; let currentRot = 0, currentTilt = 0; const LANES = [-10, 0, 10]; let steerCurrent = 0;   let steerTarget  = 0;  // desired steering
 
                 const animate = () => {
                     requestAnimationFrame(animate);
@@ -339,25 +339,31 @@
 
                     // Roll-based steering with hysteresis zones
                     // ESP32 sends: -5 (Left), 0 (Center), 5 (Right)
-                    let steer = 0;
-
+                 // --- TARGET steering (slow + deliberate) ---
+                    steerTarget = 0;
                     // Keyboard fallback
-                    if (keys['a'] || keys['ArrowLeft']) steer = -0.6;
-                    else if (keys['d'] || keys['ArrowRight']) steer = 0.6;
+                    if (keys['a'] || keys['ArrowLeft']) steerTarget = -0.4;
+                    else if (keys['d'] || keys['ArrowRight']) steerTarget = 0.4;
                     
-                    // ESP32 steering (DISCRETE)
-                    else if (tilt === -5) steer = -0.6;
-                    else if (tilt === 5)  steer = 0.6;
-
-                    if (playerCar.position.x > -13 && steer < 0) {
-                         playerCar.position.x += steer;
-                         tr = 0.3 * (Math.abs(steer) * 2); tt = -0.15;
-                    } 
-                    else if (playerCar.position.x < 13 && steer > 0) {
-                         playerCar.position.x += steer;
-                         tr = -0.3 * (Math.abs(steer) * 2); tt = 0.15;
+                    // ESP32 discrete steering
+                    else if (tilt === -5) steerTarget = -0.4;
+                    else if (tilt === 5)  steerTarget = 0.4;
+                    
+                    // 2. Smooth steering (low-pass filter)
+                    steerCurrent += (steerTarget - steerCurrent) * 0.08;
+                    
+                    // 3. Apply movement with bounds
+                    if (
+                        (playerCar.position.x > -13 && steerCurrent < 0) ||
+                        (playerCar.position.x < 13 && steerCurrent > 0)
+                    ) {
+                        playerCar.position.x += steerCurrent;
                     }
-
+                    
+                    // 4. Gentle visual rotation
+                    tr = -steerCurrent * 0.25;
+                    tt = -steerCurrent * 0.15;
+                    
                     currentRot += (tr-currentRot)*0.1; currentTilt += (tt-currentTilt)*0.1;
                     playerCar.rotation.y = currentRot; playerCar.rotation.z = currentTilt;
                     camera.position.x = playerCar.position.x * 0.6; camera.lookAt(playerCar.position.x * 0.3, 2, -50);
@@ -460,6 +466,7 @@
     </script>
 </body>
 </html>
+
 
 
 
