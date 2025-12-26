@@ -3,26 +3,43 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Blocky Racer: Motion Delta</title>
+    <title>Blocky Racer: Fixed UI</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #222; font-family: 'Segoe UI', Arial, sans-serif; }
         
+        /* --- UI STYLES (Restored from Robust Version) --- */
         #debug-panel {
-            position: fixed; top: 10px; left: 10px; width: 300px;
-            background: rgba(0,0,0,0.8); color: #00ff00; 
-            padding: 15px; border-left: 4px solid #00ff00;
+            position: fixed; top: 10px; left: 10px; width: 280px;
+            background: rgba(0,0,0,0.8); color: #0f0; 
+            padding: 15px; border-left: 4px solid #0f0;
             font-family: monospace; z-index: 10000;
             pointer-events: none;
         }
         
-        #loader { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #000; color: white; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 999; transition: opacity 0.5s; }
+        #loader { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            background: #000; color: white; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 999; 
+            transition: opacity 0.5s; 
+        }
+        
         #hud { position: absolute; top: 20px; right: 20px; color: white; text-shadow: 2px 2px 4px #000; z-index: 10; pointer-events: none; text-align: right; }
+        
         #menuBtn { position: absolute; bottom: 20px; right: 20px; background: rgba(0,0,0,0.6); color: white; border: 2px solid white; padding: 10px 20px; font-size: 18px; font-weight: bold; cursor: pointer; z-index: 20; border-radius: 5px; pointer-events: auto; }
+        
+        #sideMenu { position: absolute; top: 0; right: -350px; width: 300px; height: 100%; background: rgba(0,0,0,0.95); color: white; z-index: 100; padding: 30px; box-sizing: border-box; transition: right 0.3s ease-out; display: flex; flex-direction: column; border-left: 2px solid #444; }
+        #sideMenu.open { right: 0; }
+        
+        .menu-opt { margin: 10px 0; padding: 15px; background: #333; cursor: pointer; border: 1px solid #555; text-align: center; border-radius: 5px; transition: all 0.2s; }
+        .menu-opt.active { background: #4CAF50; border-color: #81C784; font-weight: bold; }
+        
         #overlayScreen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 50; color: white; backdrop-filter: blur(5px); }
+        
         .big-btn { padding: 20px 60px; font-size: 32px; background: #4CAF50; color: white; border: none; border-radius: 10px; cursor: pointer; margin-top: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
         .bt-btn { padding: 15px 40px; font-size: 20px; background: #2196F3; color: white; border: none; border-radius: 30px; cursor: pointer; margin-top: 20px; display: flex; align-items: center; gap: 10px; }
         .bt-btn.connected { background: #607D8B; cursor: default; }
     </style>
+    
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -32,44 +49,52 @@
     
     <div id="debug-panel">
         <div>STATUS: <span id="st">DISCONNECTED</span></div>
-        <div>CURRENT ANGLE: <span id="curr">0.0</span></div>
-        <div>ROTATION SPEED: <span id="delta">0.0</span></div>
-        <div>ACTION: <span id="action" style="color:yellow">RELEASED</span></div>
+        <div>Y-AXIS: <span id="tx">0.00</span></div>
+        <div>DELTA: <span id="dx">0.00</span></div>
+        <div>ACTION: <span id="ax" style="color:yellow">--</span></div>
     </div>
 
-    <div id="loader"><h1>Loading Game...</h1></div>
+    <div id="loader">
+        <h1>Loading Engine...</h1>
+        <p>Calibrating...</p>
+    </div>
     <div id="root"></div>
 
     <script type="text/babel">
         const { useEffect, useRef, useState } = React;
 
-        // GLOBAL DEBUG HELPERS
-        window.updateDebug = (status, curr, delta, action) => {
-            if(status) document.getElementById('st').innerText = status;
-            if(curr !== null) document.getElementById('curr').innerText = curr.toFixed(1);
-            if(delta !== null) document.getElementById('delta').innerText = delta.toFixed(1);
-            if(action) document.getElementById('action').innerText = action;
+        // --- GLOBAL DEBUG ---
+        window.updateDebug = (status, x, d, a) => {
+            if(status) { const el = document.getElementById('st'); if(el) el.innerText = status; }
+            if(x !== null) { const el = document.getElementById('tx'); if(el) el.innerText = x.toFixed(2); }
+            if(d !== null) { const el = document.getElementById('dx'); if(el) el.innerText = d.toFixed(2); }
+            if(a !== null) { const el = document.getElementById('ax'); if(el) el.innerText = a; }
         };
-
+        
         const BlockyCarGame = () => {
             const mountRef = useRef(null);
+            
+            // --- STATE ---
             const [gameStarted, setGameStarted] = useState(false);
             const [gameOver, setGameOver] = useState(false);
             const [score, setScore] = useState(0);
             const [highScore, setHighScore] = useState(0);
+            const [newRecord, setNewRecord] = useState(false);
+            const [menuOpen, setMenuOpen] = useState(false);
+            const [uiDifficulty, setUiDifficulty] = useState('Progressive');
             const [btConnected, setBtConnected] = useState(false);
 
-            const btRef = useRef({ device: null, server: null, sensorChar: null, vibeChar: null, tilt: 0 });
-            
-            // NEW: Reference to store the PREVIOUS frame's tilt
-            const prevTiltRef = useRef(0);
+            // --- REFS ---
             const isVibratingRef = useRef(false);
+            const prevTiltRef = useRef(0);
             
+            const btRef = useRef({ device: null, server: null, sensorChar: null, vibeChar: null, tilt: 0 });
             const gameStateRef = useRef({
                 isGameOver: false, isPaused: false, score: 0,
                 movingTime: 0, totalDistance: 0, gridRows: [], opponents: [], difficulty: 'Progressive'
             });
 
+            // --- UUIDS ---
             const SERVICE_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214";
             const SENSOR_CHAR_UUID = "19b10001-e8f2-537e-4f6c-d104768a1214";
             const VIBE_CHAR_UUID = "19b10002-e8f2-537e-4f6c-d104768a1214";
@@ -79,240 +104,462 @@
                 if (saved) setHighScore(parseInt(saved));
             }, []);
 
+            // --- BLUETOOTH ---
             const connectBluetooth = async () => {
                 try {
                     window.updateDebug("SEARCHING...", null, null, null);
-                    const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }] });
-                    device.addEventListener('gattserverdisconnected', () => setBtConnected(false));
+                    const device = await navigator.bluetooth.requestDevice({
+                        filters: [{ services: [SERVICE_UUID] }]
+                    });
+           
+                    device.addEventListener('gattserverdisconnected', onDisconnected);
                     const server = await device.gatt.connect();
                     const service = await server.getPrimaryService(SERVICE_UUID);
                     
+                    // Sensor
                     const sensorChar = await service.getCharacteristic(SENSOR_CHAR_UUID);
                     await sensorChar.startNotifications();
                     sensorChar.addEventListener('characteristicvaluechanged', (event) => {
                         const decoder = new TextDecoder('utf-8');
-                        let val = parseFloat(decoder.decode(event.target.value));
+                        const rawString = decoder.decode(event.target.value);
+                        let val = parseFloat(rawString);
                         if (!isNaN(val)) {
-                            // SCALING: Multiply by 10 so raw 0-9.8 becomes 0-98 (Degrees-ish)
-                            // This makes the threshold of "5" meaningful
-                            btRef.current.tilt = val * 10; 
+                            // Multiply by 10 to give better granularity for Delta calculation
+                            btRef.current.tilt = val * 10;
                         }
                     });
 
+                    // Vibe
                     const vibeChar = await service.getCharacteristic(VIBE_CHAR_UUID);
                     btRef.current = { device, server, sensorChar, vibeChar, tilt: 0 };
                     setBtConnected(true);
-                    window.updateDebug("CONNECTED", 0, 0, "READY");
+                    window.updateDebug("CONNECTED", 0, 0, "--");
+                    
                 } catch (error) {
-                    console.error("BLE Error", error);
+                    console.error("Bluetooth Error:", error);
                     window.updateDebug("ERROR", null, null, null);
+                    alert("Connection Failed. Did you reset the ESP32?");
                 }
+            };
+
+            const onDisconnected = () => {
+                setBtConnected(false);
+                btRef.current.vibeChar = null;
+                window.updateDebug("DISCONNECTED", 0, 0, "--");
             };
 
             const sendVibration = async () => {
                 if (btRef.current.vibeChar && !isVibratingRef.current) {
                     isVibratingRef.current = true;
                     try {
-                        const enc = new TextEncoder('utf-8');
-                        const data = enc.encode('1');
-                        if (btRef.current.vibeChar.properties.writeWithoutResponse) {
-                            await btRef.current.vibeChar.writeValueWithoutResponse(data);
+                        const encoder = new TextEncoder('utf-8');
+                         if (btRef.current.vibeChar.properties.writeWithoutResponse) {
+                            await btRef.current.vibeChar.writeValueWithoutResponse(encoder.encode('1'));
                         } else {
-                            await btRef.current.vibeChar.writeValue(data);
+                            await btRef.current.vibeChar.writeValue(encoder.encode('1'));
                         }
-                    } catch(e) {}
+                    } catch(e) { console.error("Crash Vibe Error", e); }
                     setTimeout(() => { isVibratingRef.current = false; }, 1000);
                 }
             };
 
+            // --- MENU LOGIC ---
+            const toggleMenu = () => { if (gameOver || !gameStarted) return; setMenuOpen(!menuOpen); gameStateRef.current.isPaused = !menuOpen; };
+            const changeDifficulty = (mode) => { gameStateRef.current.difficulty = mode; setUiDifficulty(mode); };
+            
             const triggerRestart = () => {
-                setGameOver(false); setScore(0);
+                setGameOver(false); setScore(0); setNewRecord(false); setMenuOpen(false);
                 const ref = gameStateRef.current;
-                ref.isGameOver = false; ref.isPaused = false; ref.score = 0;
-                ref.opponents.forEach(o => o.mesh.parent?.remove(o.mesh));
+                ref.isGameOver = false; ref.isPaused = false; ref.score = 0; ref.movingTime = 0; ref.totalDistance = 0;
+                ref.opponents.forEach(o => { if(o.mesh && o.mesh.parent) o.mesh.parent.remove(o.mesh); });
                 ref.opponents = [];
+                for (let i = 0; i < ref.gridRows.length; i++) {
+                    ref.gridRows[i].z = -350 + (i * 30);
+                    updateRowVisuals(ref.gridRows[i], true); 
+                }
             };
 
             useEffect(() => {
-                const handleKeyDown = (e) => { if (gameOver && e.code === 'Space') triggerRestart(); };
+                const handleKeyDown = (e) => {
+                    if (gameOver && e.code === 'Space') triggerRestart();
+                };
                 window.addEventListener('keydown', handleKeyDown);
                 return () => window.removeEventListener('keydown', handleKeyDown);
-            }, [gameOver]);
+            }, [gameOver]); 
 
-            // --- THREE.JS SCENE ---
+            // --- 3D ENVIRONMENT HELPERS ---
+            const updateRowVisuals = (rowObj, isRural) => {
+                rowObj.treeOuterL.visible = isRural; rowObj.treeOuterR.visible = isRural;
+                rowObj.treeInnerL.visible = false; rowObj.treeInnerR.visible = false;
+                rowObj.buildL.visible = false; rowObj.buildR.visible = false;
+                if (isRural) {
+                    rowObj.treeInnerL.visible = Math.random() > 0.5; rowObj.treeInnerR.visible = Math.random() > 0.5;
+                    if (Math.random() > 0.8) { setBuildingType(rowObj.buildL, 'house'); rowObj.buildL.visible = true; rowObj.treeInnerL.visible = false; }
+                    if (Math.random() > 0.8) { setBuildingType(rowObj.buildR, 'house'); rowObj.buildR.visible = true; rowObj.treeInnerR.visible = false; }
+                } else {
+                    setBuildingType(rowObj.buildL, 'random'); rowObj.buildL.visible = true;
+                    setBuildingType(rowObj.buildR, 'random'); rowObj.buildR.visible = true;
+                }
+            };
+            const setBuildingType = (group, type) => {
+                group.children.forEach(c => c.visible = false);
+                let idx = 0;
+                if (type === 'house') idx = 0;
+                else { const r = Math.random(); if (r < 0.25) idx = 0; else if (r < 0.5) idx = 1; else if (r < 0.75) idx = 2; else idx = 3; }
+                group.children[idx].visible = true;
+            };
+
+            // --- MAIN THREE.JS SETUP ---
             useEffect(() => {
                 if (!mountRef.current) return;
+                
                 const scene = new THREE.Scene();
-                scene.background = new THREE.Color(0x222222);
-                scene.fog = new THREE.Fog(0x222222, 10, 200);
+                scene.background = new THREE.Color(0x87CEEB);
+                scene.fog = new THREE.Fog(0xaaccff, 10, 280); 
+                
                 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-                camera.position.set(0, 10, 35);
                 const renderer = new THREE.WebGLRenderer({ antialias: true });
                 renderer.setSize(window.innerWidth, window.innerHeight);
                 renderer.shadowMap.enabled = true;
+                renderer.shadowMap.type = THREE.PCFSoftShadowMap; 
                 mountRef.current.appendChild(renderer.domElement);
 
-                // Lighting & Assets
-                const l = document.getElementById('loader'); if(l) { l.style.opacity = 0; setTimeout(()=>l.style.display='none',500); }
+                // --- ASSET LOADER ---
+                const hideLoader = () => {
+                    const l = document.getElementById('loader'); 
+                    if(l) { l.style.opacity = 0; setTimeout(() => l.style.display = 'none', 500); }
+                };
+
+                new THREE.TextureLoader().load(
+                    'https://images.unsplash.com/photo-1513002749550-c59d786b8e6c?q=80&w=2560&auto=format&fit=crop', 
+                    (t) => { scene.background = t; hideLoader(); },
+                    undefined,
+                    (err) => { console.log("Image Failed, using Blue", err); hideLoader(); } 
+                );
+                // Fallback if image fails to load
+                setTimeout(hideLoader, 2000);
+
+                // --- LIGHTS ---
                 const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); scene.add(ambientLight);
                 const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
-                dirLight.position.set(50, 100, 50); dirLight.castShadow = true; scene.add(dirLight);
+                dirLight.position.set(100, 150, 50); dirLight.castShadow = true;
+                dirLight.shadow.mapSize.width = 4096; dirLight.shadow.mapSize.height = 4096;
+                dirLight.shadow.camera.left = -200; dirLight.shadow.camera.right = 200;
+                dirLight.shadow.camera.top = 200; dirLight.shadow.camera.bottom = -200;
+                scene.add(dirLight);
 
-                // Helper Functions for Cars/World
-                const mkBox=(w,h,d,c,x,y,z)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshLambertMaterial({color:c}));m.position.set(x,y,z);m.castShadow=true;return m;};
-                const createCar=(t,c)=>{
-                    const g=new THREE.Group();
-                    const body=mkBox(2.4,1,4.2,c,0,1,0); 
-                    const top=mkBox(2,0.8,2,0x222222,0,1.8,-0.5);
-                    g.add(body,top);
-                    if(t==='ambulance'){
-                        g.remove(top); 
-                        g.add(mkBox(2.4,1.5,4,0xFFFFFF,0,1.5,0)); // Boxy
-                        g.rotation.y = Math.PI; // FLIP AMBULANCE
+                // --- ENVIRONMENT BUILDERS ---
+                const createMultiBuilding=()=>{const g=new THREE.Group();const c=[0xE6E6FA,0xF5DEB3,0xFFB6C1,0x87CEFA,0x98FB98,0xD3D3D3][Math.floor(Math.random()*6)];const wm=new THREE.MeshLambertMaterial({color:0x333333});const dm=new THREE.MeshLambertMaterial({color:0x4A3627});const rm=new THREE.MeshLambertMaterial({color:0x8B4513});const h=new THREE.Group();const hw=new THREE.Mesh(new THREE.BoxGeometry(12,10,12),new THREE.MeshLambertMaterial({color:c}));hw.position.y=5;hw.castShadow=true;h.add(hw);const hr=new THREE.Mesh(new THREE.ConeGeometry(9,6,4),rm);hr.position.y=13;hr.rotation.y=Math.PI/4;h.add(hr);h.add(new THREE.Mesh(new THREE.BoxGeometry(3,6,0.5),dm).translateY(3).translateZ(6));h.add(new THREE.Mesh(new THREE.BoxGeometry(2.5,2.5,0.5),wm).translateY(6).translateX(-3.5).translateZ(6));h.add(new THREE.Mesh(new THREE.BoxGeometry(2.5,2.5,0.5),wm).translateY(6).translateX(3.5).translateZ(6));h.add(new THREE.Mesh(new THREE.BoxGeometry(2,4,2),new THREE.MeshLambertMaterial({color:0x555555})).translateY(13).translateX(3).translateZ(-3));g.add(h);const s=new THREE.Group();const sw=new THREE.Mesh(new THREE.BoxGeometry(14,45,14),new THREE.MeshLambertMaterial({color:0xaaaaaa}));sw.position.y=22.5;sw.castShadow=true;s.add(sw);for(let i=0;i<6;i++){const w=new THREE.Group();const wn=new THREE.Mesh(new THREE.BoxGeometry(3,4,0.5),wm);w.add(wn.clone().translateX(-4));w.add(wn.clone().translateX(4));w.position.set(0,5+i*6,7);s.add(w);}s.visible=false;g.add(s);const f=new THREE.Group();const fw=new THREE.Mesh(new THREE.BoxGeometry(18,12,18),new THREE.MeshLambertMaterial({color:0xCD5C5C}));fw.position.y=6;fw.castShadow=true;f.add(fw);f.add(new THREE.Mesh(new THREE.CylinderGeometry(1.5,1.5,10,12),new THREE.MeshLambertMaterial({color:0x333333})).translateY(15).translateX(-5).translateZ(-5));f.add(new THREE.Mesh(new THREE.CylinderGeometry(1.5,1.5,10,12),new THREE.MeshLambertMaterial({color:0x333333})).translateY(15).translateX(5));f.visible=false;g.add(f);const gl=new THREE.Group();const gw=new THREE.Mesh(new THREE.BoxGeometry(15,30,15),new THREE.MeshLambertMaterial({color:0x00CED1,transparent:true,opacity:0.8}));gw.position.y=15;gw.castShadow=true;gl.add(gw);for(let i=1;i<5;i++)gl.add(new THREE.Mesh(new THREE.BoxGeometry(14.5,0.5,14.5),new THREE.MeshLambertMaterial({color:0xffffff})).translateY(i*6));gl.visible=false;g.add(gl);return g;};
+                const createTree=()=>{const g=new THREE.Group();const t=Math.random();if(t<0.3){g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.7,2.5,6),new THREE.MeshLambertMaterial({color:0x3d2817})).translateY(1.25));const l=new THREE.Mesh(new THREE.ConeGeometry(3,7,8),new THREE.MeshLambertMaterial({color:0x1a472a}));l.position.y=5;l.castShadow=true;g.add(l);}else if(t<0.6){g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.6,3.5,6),new THREE.MeshLambertMaterial({color:0x5C4033})).translateY(1.75));const c=[0xFFB7C5,0xFF69B4,0xFFA500,0xFFFF00][Math.floor(Math.random()*4)];const l=new THREE.Mesh(new THREE.DodecahedronGeometry(2.8),new THREE.MeshLambertMaterial({color:c}));l.position.y=4.5;l.castShadow=true;g.add(l);}else{g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.6,0.7,3,6),new THREE.MeshLambertMaterial({color:0x8B4513})).translateY(1.5));const l=new THREE.Mesh(new THREE.SphereGeometry(3,7,7),new THREE.MeshLambertMaterial({color:0x228B22}));l.position.y=4;l.castShadow=true;g.add(l);}g.scale.set(1.3,1.3,1.3);return g;};
+
+                // --- CAR FACTORY ---
+                const createCar = (type, color) => {
+                    const carGroup = new THREE.Group();
+                    
+                    const matBody = new THREE.MeshLambertMaterial({color: color});
+                    const matWin = new THREE.MeshLambertMaterial({color: 0x222222});
+                    const matGrey = new THREE.MeshLambertMaterial({color: 0x555555});
+                    const matWhite = new THREE.MeshLambertMaterial({color: 0xFFFFFF});
+
+                    // Wheel Geometry
+                    const wheelGeo = new THREE.CylinderGeometry(0.6, 0.6, 0.5, 16);
+                    const matWheel = new THREE.MeshLambertMaterial({color: 0x111111});
+                    
+                    // Create Chassis Group (To allow independent rotation)
+                    const chassis = new THREE.Group();
+                    
+                    // Helper to add Box
+                    const addBox = (w, h, d, mat, x, y, z) => {
+                        const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+                        m.position.set(x, y, z); m.castShadow = true;
+                        chassis.add(m);
+                    };
+
+                    // Wheels (Attached to carGroup, not chassis, to keep simple)
+                    [[-1.2, 1.2], [1.2, 1.2], [-1.2, -1.2], [1.2, -1.2]].forEach(pos => {
+                        const w = new THREE.Mesh(wheelGeo, matWheel);
+                        w.rotation.z = Math.PI / 2;
+                        w.position.set(pos[0], 0.6, pos[1]);
+                        w.castShadow = true;
+                        carGroup.add(w);
+                    });
+
+                    // Build Specific Car Types
+                    if (type === 'ambulance') {
+                        // AMBULANCE: Main Body
+                        addBox(2.4, 1.4, 4.0, matBody, 0, 1.5, 0); 
+                        addBox(2.2, 0.8, 1.2, matBody, 0, 1.2, -2.0); // Hood
+                        // Cross
+                        addBox(1.2, 0.3, 0.1, new THREE.MeshLambertMaterial({color:0xFF0000}), 0, 1.5, 2.05);
+                        addBox(0.3, 1.2, 0.1, new THREE.MeshLambertMaterial({color:0xFF0000}), 0, 1.5, 2.05);
+                        
+                        // FIX: ROTATE CHASSIS 180 TO FACE FORWARD
+                        chassis.rotation.y = Math.PI;
+
+                    } else if (type === 'truck') {
+                        // TRUCK: Boxy
+                        addBox(2.4, 1.8, 3.2, new THREE.MeshLambertMaterial({color:0x0055AA}), 0, 1.7, 0.4); // Cargo
+                        addBox(2.3, 1.1, 1.2, matBody, 0, 1.35, -1.8); // Cab
+                        
+                    } else if (type === 'viper') {
+                        // VIPER: Low, long nose
+                        addBox(2.4, 0.7, 4.5, matBody, 0, 1.0, 0); // Low body
+                        addBox(2.0, 0.5, 1.5, matWin, 0, 1.6, 0.5); // Cabin
+                        
+                    } else {
+                        // SEDAN / POLICE
+                        addBox(2.4, 0.8, 4.2, matBody, 0, 1.0, 0); // Body
+                        addBox(2.0, 0.6, 2.0, matWin, 0, 1.7, -0.2); // Top
+                        
+                        if (type === 'police') {
+                            addBox(1.4, 0.1, 0.3, matGrey, 0, 2.05, -0.2); // Siren Bar
+                            const rL = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.2, 0.2), new THREE.MeshLambertMaterial({color:0xFF0000}));
+                            rL.position.set(-0.5, 2.15, -0.2); chassis.add(rL);
+                            const rR = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.2, 0.2), new THREE.MeshLambertMaterial({color:0x0000FF}));
+                            rR.position.set(0.5, 2.15, -0.2); chassis.add(rR);
+                        }
                     }
-                    else if(t!=='ambulance') g.rotation.y = Math.PI; // Flip others too
-                    return g;
+
+                    carGroup.add(chassis);
+                    carGroup.scale.set(1.4, 1.4, 1.4);
+                    return carGroup;
+                };
+
+                // --- SCENE OBJECTS ---
+                const playerCar = createCar('viper', 0xFF0055); 
+                scene.add(playerCar);
+
+                const road = new THREE.Mesh(new THREE.PlaneGeometry(30, 1000), new THREE.MeshLambertMaterial({ color: 0x444444 }));
+                road.rotation.x = -Math.PI / 2; road.receiveShadow = true; scene.add(road);
+
+                const grassL = new THREE.Mesh(new THREE.BoxGeometry(250, 1, 1000), new THREE.MeshLambertMaterial({ color: 0x2d5a27 })); 
+                grassL.position.set(-140, -0.6, 0); scene.add(grassL);
+                const grassR = new THREE.Mesh(new THREE.BoxGeometry(250, 1, 1000), new THREE.MeshLambertMaterial({ color: 0x2d5a27 })); 
+                grassR.position.set(140, -0.6, 0); scene.add(grassR);
+
+                const markings = new THREE.Group(); 
+                for(let i=-20; i<80; i++) { 
+                    const m = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.1, 4), new THREE.MeshBasicMaterial({ color: 0xFFFFFF })); 
+                    m.position.set(-5, 0.05, i*10); markings.add(m.clone()); 
+                    m.position.set(5, 0.05, i*10); markings.add(m); 
+                } scene.add(markings);
+
+                const GRID_STEP = 30; const NUM_ROWS = 40; const START_Z = -350;
+                for (let i = 0; i < NUM_ROWS; i++) {
+                    const z = START_Z + (i * GRID_STEP);
+                    const tL = createTree(); tL.position.set(-20, 0, 0); const tR = createTree(); tR.position.set(20, 0, 0);
+                    const tOL = createTree(); tOL.position.set(-55, 0, 0); const tOR = createTree(); tOR.position.set(55, 0, 0);
+                    const bL = createMultiBuilding(); bL.position.set(-35, 0, 0); const bR = createMultiBuilding(); bR.position.set(35, 0, 0);
+                    const rowG = new THREE.Group(); rowG.position.z = z; rowG.add(tL, tR, tOL, tOR, bL, bR); scene.add(rowG);
+                    const rowObj = { mesh: rowG, z: z, treeInnerL: tL, treeInnerR: tR, treeOuterL: tOL, treeOuterR: tOR, buildL: bL, buildR: bR };
+                    updateRowVisuals(rowObj, true); gameStateRef.current.gridRows.push(rowObj);
                 }
 
-                // Setup World
-                const playerCar = createCar('sport', 0xFF0055); 
-                playerCar.rotation.y = 0; // Player faces forward
-                scene.add(playerCar);
-                const road = mkBox(30,1,1000,0x333333,0,-0.6,0); scene.add(road);
-                const grass = mkBox(500,1,1000,0x1a472a,0,-1.0,0); scene.add(grass);
+                // --- INPUTS ---
+                const keys = {}; const onKey = (e) => keys[e.key] = e.type === 'keydown';
+                window.addEventListener('keydown', onKey); window.addEventListener('keyup', onKey);
                 
-                // --- MAIN GAME LOOP ---
-                let speed = 0;
-                let currentRot = 0;
-                
+                camera.position.set(0, 10, 35); 
+                let speed = 0; let spawnTimer = 0; let currentRot = 0; let currentTilt = 0; 
+                const LANES = [-10, 0, 10];
+
+                // --- GAME LOOP ---
                 const animate = () => {
                     requestAnimationFrame(animate);
+                    
                     if (!gameStateRef.current.gameStarted || gameStateRef.current.isGameOver || gameStateRef.current.isPaused) {
-                        if(gameStateRef.current.gameStarted) renderer.render(scene, camera); return;
+                        if(gameStateRef.current.gameStarted) renderer.render(scene, camera); 
+                        return;
                     }
 
-                    // --- NEW CONTROL LOGIC (DELTA STEERING) ---
-                    
-                    const THRESHOLD = 0.5; // You asked for 5, but we check rotation speed here. 
-                                         // Since we scaled by 10, 0.5 change is significant.
-                                         // If it feels too sensitive, increase this to 1.0 or 2.0
-                    
-                    const currentTilt = btRef.current.tilt;
-                    const prevTilt = prevTiltRef.current;
-                    
-                    // 1. Calculate Rotation Speed (Delta)
-                    // If I was at -8, and now at -3. Delta is +5.
-                    const rotationDelta = currentTilt - prevTilt;
+                    // World Movement
+                    if (speed > 0) { gameStateRef.current.movingTime += 0.016; gameStateRef.current.totalDistance += speed; }
+                    const t = gameStateRef.current.movingTime; const diffMode = gameStateRef.current.difficulty;
 
-                    let steeringAction = 0; // 0 = Release, -1 = Left, 1 = Right
-                    let actionText = "RELEASED";
-
-                    // 2. Logic: Speed of Rotation determines key press
-                    // Note: Since we use X-Axis, usually Negative is Left, Positive is Right
-                    
-                    if (rotationDelta > THRESHOLD) {
-                        // Rapidly rotating Right (or Tilt increasing)
-                        steeringAction = 1; // Simulate 'D'
-                        actionText = "TURNING RIGHT >>";
-                    } 
-                    else if (rotationDelta < -THRESHOLD) {
-                        // Rapidly rotating Left (or Tilt decreasing)
-                        steeringAction = -1; // Simulate 'A'
-                        actionText = "<< TURNING LEFT";
-                    } 
-                    else {
-                        // "Stays at same value" -> Delta is near 0
-                        steeringAction = 0; // Simulate Release
-                        actionText = "RELEASED (HOLDING)";
-                    }
-
-                    // Update Debug
-                    window.updateDebug(null, currentTilt, rotationDelta, actionText);
-                    
-                    // Update Previous for next frame
-                    prevTiltRef.current = currentTilt;
-
-                    // 3. Apply Steering
-                    const STEER_POWER = 0.4;
-                    if (playerCar.position.x > -13 && steeringAction < 0) {
-                        playerCar.position.x -= STEER_POWER;
-                        currentRot = 0.3; // Lean Visual
-                    } 
-                    else if (playerCar.position.x < 13 && steeringAction > 0) {
-                        playerCar.position.x += STEER_POWER;
-                        currentRot = -0.3; // Lean Visual
+                    // Difficulty
+                    let laneSwitchProb = 0, spawnRate = 80;
+                    if (diffMode === 'Progressive') {
+                        if (t > 30 && t <= 60) { laneSwitchProb=0.005; spawnRate=60; }
+                        else if (t > 60) { laneSwitchProb=0.02; spawnRate=55; }
                     } else {
-                        currentRot = 0; // Straighten Visual
+                        if (diffMode === 'Medium') { laneSwitchProb=0.005; spawnRate=60; }
+                        else if (diffMode === 'Hard') { laneSwitchProb=0.02; spawnRate=55; }
                     }
 
-                    // Smooth Visual Tilt
-                    playerCar.rotation.y += (currentRot - playerCar.rotation.y) * 0.1;
-                    camera.position.x = playerCar.position.x * 0.6;
+                    // Acceleration
+                    if(keys['w']||keys['ArrowUp']) speed = Math.min(speed+0.025, 0.9); else speed = Math.max(speed-0.01, 0);
 
-                    // --- GAME MECHANICS ---
-                    if(speed < 0.8) speed += 0.005;
-                    gameStateRef.current.score += 1;
-                    setScore(Math.floor(gameStateRef.current.score/10));
+                    // --- CONTROL LOGIC: Y-AXIS DELTA ---
+                    const THRESHOLD = 0.5; 
+                    const currY = btRef.current.tilt; 
+                    const prevY = prevTiltRef.current;
+                    const delta = currY - prevY;
+                    
+                    let steer = 0;
+                    let actionText = "HOLD";
 
-                    // Spawning
-                    if (Math.random() < 0.02) {
-                        const lanes = [-10, 0, 10];
-                        const type = Math.random()<0.3?'ambulance':'sedan';
-                        const col = type==='ambulance'?0xFFFFFF:0x0088ff;
-                        const enemy = createCar(type, col);
-                        enemy.position.set(lanes[Math.floor(Math.random()*3)], 0, -300);
-                        scene.add(enemy);
-                        gameStateRef.current.opponents.push(enemy);
+                    // Detect fast changes
+                    if (delta > THRESHOLD) {
+                        steer = 0.5; 
+                        actionText = "RIGHT >>";
+                    } else if (delta < -THRESHOLD) {
+                        steer = -0.5; 
+                        actionText = "<< LEFT";
+                    } else {
+                        steer = 0;
+                    }
+                    
+                    // Keyboard Fallback
+                    if (keys['a'] || keys['ArrowLeft']) steer = -0.5;
+                    if (keys['d'] || keys['ArrowRight']) steer = 0.5;
+
+                    window.updateDebug(null, currY, delta, actionText);
+                    prevTiltRef.current = currY;
+
+                    // Apply Steering Physics
+                    let tr = 0, tt = 0;
+                    if (playerCar.position.x > -13 && steer < 0) {
+                         playerCar.position.x += steer;
+                         tr = 0.3 * (Math.abs(steer) * 2); tt = -0.15;
+                    } 
+                    else if (playerCar.position.x < 13 && steer > 0) {
+                         playerCar.position.x += steer;
+                         tr = -0.3 * (Math.abs(steer) * 2); tt = 0.15;
                     }
 
-                    // Move Enemies
+                    currentRot += (tr-currentRot)*0.1; currentTilt += (tt-currentTilt)*0.1;
+                    playerCar.rotation.y = currentRot; playerCar.rotation.z = currentTilt;
+                    camera.position.x = playerCar.position.x * 0.6; camera.lookAt(playerCar.position.x * 0.3, 2, -50);
+
+                    // Scrolling Environment
+                    if(speed > 0) {
+                        gameStateRef.current.score += 1; setScore(Math.floor(gameStateRef.current.score));
+                        markings.position.z = (markings.position.z + speed) % 40;
+                        const isRural = Math.floor(gameStateRef.current.totalDistance / 400) % 2 === 0;
+                        let minZ = 10000; gameStateRef.current.gridRows.forEach(r => minZ = Math.min(minZ, r.z));
+                        gameStateRef.current.gridRows.forEach(row => {
+                            row.z += speed; if (row.z > 80) { row.z = minZ - GRID_STEP; minZ = row.z; updateRowVisuals(row, isRural); }
+                            row.mesh.position.z = row.z;
+                        });
+                    }
+
+                    // Spawning Traffic
+                    const trafficSpeed = 0.6 + speed; spawnTimer += trafficSpeed;
+                    if(spawnTimer > spawnRate) { 
+                        spawnTimer = 0; const r = Math.random(); 
+                        
+                        let type = 'sedan'; 
+                        let col = 0x888888;
+                        const vibrantColors = [0xFF0000, 0x0066FF, 0x00CC44, 0xFF9900, 0x9933FF, 0xFF00CC];
+                        col = vibrantColors[Math.floor(Math.random() * vibrantColors.length)];
+
+                        if(r<0.15) type='police'; 
+                        else if(r<0.30) { type='ambulance'; col=0xFFFFFF; } 
+                        else if(r<0.45) { type='truck'; col=0xFFFFFF; } 
+                        else if(r<0.60) { type='viper'; col=0xFFFF00; } 
+                        
+                        const c = createCar(type, col); 
+                        c.position.set(LANES[Math.floor(Math.random()*3)], 0, -250); 
+                        
+                        // Rotate all enemies 180 to face player
+                        // (Ambulance chassis was pre-flipped, so flipping the group works for all)
+                        c.rotation.y = Math.PI;
+
+                        scene.add(c); gameStateRef.current.opponents.push({ mesh: c, laneIdx: Math.floor(Math.random()*3) });
+                    }
+
+                    // Move Traffic
                     const ops = gameStateRef.current.opponents;
                     for (let i = ops.length - 1; i >= 0; i--) {
-                        const enemy = ops[i];
-                        enemy.position.z += (0.8 + speed); 
+                        const opp = ops[i]; opp.mesh.position.z += trafficSpeed;
                         
-                        // Crash
-                        if (Math.abs(enemy.position.z) < 4 && Math.abs(enemy.position.x - playerCar.position.x) < 2.5) {
-                            sendVibration();
-                            setGameOver(true);
-                            gameStateRef.current.isGameOver = true;
+                        // Lane Switching
+                        if (laneSwitchProb > 0 && Math.random() < laneSwitchProb) {
+                             const next = opp.laneIdx + (Math.random()>0.5?1:-1); if(next>=0 && next<=2) opp.laneIdx = next;
                         }
-                        // Remove
-                        if (enemy.position.z > 50) { scene.remove(enemy); ops.splice(i, 1); }
+                        
+                        // Smooth X movement
+                        const targetX = LANES[opp.laneIdx]; const dx = targetX - opp.mesh.position.x;
+                        if(Math.abs(dx) > 0.1) { 
+                            opp.mesh.position.x += dx * 0.03; 
+                            opp.mesh.rotation.y = Math.PI + (dx>0?-0.1:0.1); 
+                        } else {
+                            opp.mesh.rotation.y = Math.PI;
+                        }
+                        
+                        // Collision
+                        if (Math.abs(opp.mesh.position.z) < 4.0 && Math.abs(playerCar.position.x - opp.mesh.position.x) < 3.0) {
+                            sendVibration(); 
+                            setGameOver(true); gameStateRef.current.isGameOver = true; 
+                            const h = localStorage.getItem('blockyRacerHighScore') ? parseInt(localStorage.getItem('blockyRacerHighScore')) : 0;
+                            if (gameStateRef.current.score > h) { localStorage.setItem('blockyRacerHighScore', gameStateRef.current.score); setHighScore(gameStateRef.current.score); setNewRecord(true); } else setNewRecord(false);
+                        }
+                        
+                        // Cleanup
+                        if(opp.mesh.position.z > 80) { scene.remove(opp.mesh); ops.splice(i, 1); }
                     }
-
                     renderer.render(scene, camera);
                 };
+                
                 animate();
 
-                // Cleanup
-                const handleResize = () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); };
+                // Handle Resize
+                const handleResize = () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); };
                 window.addEventListener('resize', handleResize);
-                return () => { window.removeEventListener('resize', handleResize); if(mountRef.current) mountRef.current.innerHTML = ''; };
-
+                return () => { window.removeEventListener('resize', handleResize); window.removeEventListener('keydown', onKey); window.removeEventListener('keyup', onKey); if(mountRef.current) mountRef.current.innerHTML = ''; };
             }, []);
 
+            const onStartGame = () => { setGameStarted(true); gameStateRef.current.gameStarted = true; gameStateRef.current.isPaused = false; };
+            const onPlayAgain = () => { triggerRestart(); };
+
             return (
-                <div style={{width:'100vw', height:'100vh'}}>
+                <div style={{width:'100vw', height:'100vh', position:'relative', overflow:'hidden'}}>
                     <div ref={mountRef} style={{width:'100%', height:'100%'}} />
-                    {gameStarted && <div id="hud">
-                        <h1>Score: {score}</h1>
-                        <h3>High Score: {highScore}</h3>
-                    </div>}
-                    {!gameStarted && <div id="overlayScreen">
-                        <h1 style={{fontSize:'80px', color:'#4CAF50'}}>BLOCKY RACER</h1>
-                        <h2>Motion Delta Edition</h2>
-                        <button className={`bt-btn ${btConnected?'connected':''}`} onClick={!btConnected?connectBluetooth:null}>{btConnected?'✓ READY':'📡 CONNECT'}</button>
-                        <button className="big-btn" onClick={()=> {setGameStarted(true); gameStateRef.current.gameStarted=true;}}>START</button>
-                    </div>}
-                    {gameOver && <div id="overlayScreen">
-                        <h1 style={{color:'red'}}>CRASH!</h1>
-                        <button className="big-btn" onClick={triggerRestart}>RETRY</button>
-                    </div>}
+                    
+                    {gameStarted && (
+                    <div id="hud">
+                        <div style={{fontSize: 32, fontWeight: 'bold'}}>Score: {score}</div>
+                        <div style={{fontSize: 32, fontWeight: 'bold', color: '#FFFF00', marginTop: 5}}>High Score: {highScore}</div>
+                        <div style={{fontSize: 18, color: '#000000', marginTop: 10, fontWeight: 'bold', textShadow: '1px 1px 0 #fff'}}>Difficulty: {uiDifficulty}</div>
+                    </div>
+                    )}
+
+                    {gameStarted && !gameOver && <div id="menuBtn" onClick={toggleMenu}>MENU</div>}
+                    
+                    <div id="sideMenu" className={menuOpen ? 'open' : ''}>
+                        <h2 style={{textAlign:'center', borderBottom:'1px solid #666', paddingBottom:'10px'}}>PAUSED</h2>
+                        <div style={{marginBottom:'20px'}}>
+                            <h3 style={{fontSize:'16px', color:'#aaa'}}>Difficulty Mode</h3>
+                            <div className={`menu-opt ${uiDifficulty==='Progressive'?'active':''}`} onClick={()=>changeDifficulty('Progressive')}>Progressive</div>
+                            <div className={`menu-opt ${uiDifficulty==='Easy'?'active':''}`} onClick={()=>changeDifficulty('Easy')}>Fixed: Easy</div>
+                            <div className={`menu-opt ${uiDifficulty==='Medium'?'active':''}`} onClick={()=>changeDifficulty('Medium')}>Fixed: Medium</div>
+                            <div className={`menu-opt ${uiDifficulty==='Hard'?'active':''}`} onClick={()=>changeDifficulty('Hard')}>Fixed: Hard</div>
+                        </div>
+                        <div className="menu-opt" style={{background:'#2196F3', marginTop:'auto'}} onClick={toggleMenu}>RESUME GAME</div>
+                    </div>
+                    
+                    {!gameStarted && (
+                        <div id="overlayScreen">
+                            <h1 style={{fontSize:'80px', margin:0, color:'#4CAF50', textShadow:'4px 4px 0 #000'}}>BLOCKY RACER</h1>
+                            <p style={{fontSize:'24px', opacity:0.8}}>Y-Motion Edition</p>
+                            <p style={{marginTop:'20px', fontSize:'18px'}}>High Score: {highScore}</p>
+                            <button className={`bt-btn ${btConnected?'connected':''}`} onClick={!btConnected?connectBluetooth:null}>{btConnected?'✓ PAIRED':'📡 PAIR CONTROLLER'}</button>
+                            <button className="big-btn" onClick={onStartGame}>START ENGINE</button>
+                        </div>
+                    )}
+                    
+                    {gameOver && (
+                        <div id="overlayScreen">
+                            <h1 style={{color:'#ff4444', fontSize:'80px', margin:0}}>CRASHED!</h1>
+                            <p style={{fontSize:'32px'}}>Score: {score}</p>
+                            <p style={{fontSize:'16px', marginTop:'10px'}}>Press SPACE to Play Again</p>
+                            {newRecord && <div style={{background:'#FFD700', color:'black', padding:'10px 20px', borderRadius:'5px', fontWeight:'bold', fontSize:'20px', marginBottom:'20px'}}>🏆 NEW HIGH SCORE! 🏆</div>}
+                            <button className="big-btn" onClick={onPlayAgain}>PLAY AGAIN</button>
+                        </div>
+                    )}
                 </div>
             );
         };
-
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<BlockyCarGame />);
     </script>
