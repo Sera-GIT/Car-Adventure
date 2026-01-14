@@ -618,25 +618,27 @@
                     // =========================
                     // Keyboard W/ArrowUp still works the same.
                     // New throttle device provides throttle 0.0..1.0:
-const encoderActive = throttleBtRef.current.throttle > 0;
+let clicks = throttleBtRef.current.throttle;
+throttleBtRef.current.throttle = 0; 
+
 const keyboardActive = (keys['w'] || keys['ArrowUp']);
 
 if (keyboardActive) {
-    speed = Math.min(speed + 0.025, 0.9);
+    speed = Math.min(speed + 0.03, 0.9);
 } 
-else if (encoderActive) {
-    // Every time the encoder clicks, we add to the speed
-    speed = Math.min(speed + 0.05, 0.9);
-    
-    // IMPORTANT: Clear the throttle immediately so one click 
-    // doesn't keep the car moving forever
-    throttleBtRef.current.throttle = 0; 
+else if (clicks > 0) {
+    // SENSITIVITY TWEAK: 
+    // Increase 0.15 to 0.25 for "Super Fast" acceleration
+    // Decrease to 0.05 if it's too twitchy
+    let accelAmount = clicks * 0.15; 
+    speed = Math.min(speed + accelAmount, 0.9);
 } 
 else {
-    // 2. FRICTION: If no input, slow down significantly.
-    // Increase 0.90 to 0.95 if you want it to coast more.
-    // Decrease to 0.85 if you want it to stop faster.
-    speed *= 0.90; 
+    // FRICTION TWEAK:
+    // 0.96 makes the car glide more (easier to maintain speed)
+    // 0.85 makes it stop instantly
+    speed *= 0.96; 
+    
     if (speed < 0.01) speed = 0;
 }
 
@@ -858,6 +860,7 @@ else {
     </script>
 </body>
 </html>
+
 
 
 
