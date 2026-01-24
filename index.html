@@ -30,7 +30,7 @@
         #sideMenu.open { right: 0; }
         .menu-opt { margin: 10px 0; padding: 15px; background: #333; cursor: pointer; border: 1px solid #555; text-align: center; border-radius: 5px; transition: all 0.2s; }
         .menu-opt.active { background: #4CAF50; border-color: #81C784; font-weight: bold; }
-       #overlayScreen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 50; color: white; }
+       #overlayScreen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 50; color: white; }
         .big-btn { padding: 20px 60px; font-size: 32px; background: #4CAF50; color: white; border: none; border-radius: 10px; cursor: pointer; margin-top: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
         .bt-btn { padding: 15px 40px; font-size: 20px; background: #2196F3; color: white; border: none; border-radius: 30px; cursor: pointer; margin-top: 20px; display: flex; align-items: center; gap: 10px; }
         .bt-btn.connected { background: #4CAF50; cursor: default; }
@@ -59,24 +59,16 @@
         <div><b>BLE STATUS:</b> <span id="st" class="status-disconnected">DISCONNECTED</span></div>
         <div><b>TILT VALUE:</b> <span id="tx">0.00</span></div>
         <div><b>STEERING:</b> <span id="act">CENTER</span></div>
-        <div><b>PACKETS:</b> <span id="rcv">0</span></div>
         <hr style="border-color:#0f0;">
         <div><b>THROTTLE BLE:</b> <span id="thst" class="status-disconnected">DISCONNECTED</span></div>
         <div><b>THROTTLE:</b> <span id="thv">0.00</span></div>
-        <div><b>THROTTLE PKTS:</b> <span id="thrcv">0</span></div>
         <button id="reconnectThrottleBtn" class="test-btn tertiary" style="margin-top:8px;">🔄 RECONNECT THROTTLE</button>
         <hr style="border-color:#0f0;">
         <div style="font-size:11px;"><b>VIBRATION:</b></div>
         <div><b>Status:</b> <span id="vibeStatus">Ready</span></div>
-
-        <div><b>Writes:</b> <span id="vibeCount">0</span></div>
-
         <div><b>Last:</b> <span id="lastError" style="font-size:9px;">None</span></div>
 
         <button id="calibBtn" class="test-btn calib">📍 CALIBRATE</button>
-
-        <button id="testVibeBtn" class="test-btn">🔔 TEST VIBE</button>
-
         <button id="reconnectBtn" class="test-btn tertiary" style="margin-top:8px;">🔄 RECONNECT</button>
 
     </div>
@@ -197,8 +189,6 @@
 
             const vibeTimeoutRef = useRef(null);
 
-            const packetCountRef = useRef(0);
-
             const vibeCountRef = useRef(0);
 
 
@@ -253,7 +243,7 @@
 
                 movingTime: 0, totalDistance: 0, gridRows: [], opponents: [], difficulty: 'Progressive',
 
-                gameStarted: false
+                gameStarted: false, playerCarRef: null
 
             });
 
@@ -300,18 +290,6 @@
                     statusEl.className = isSuccess ? 'vibe-success' : 'vibe-fail';
 
                 }
-
-            };
-
-
-
-            const updateVibeCount = () => {
-
-                vibeCountRef.current++;
-
-                const countEl = document.getElementById('vibeCount');
-
-                if (countEl) countEl.innerText = vibeCountRef.current;
 
             };
 
@@ -468,14 +446,6 @@
                             if (!isNaN(val) && isFinite(val)) {
 
                                 btRef.current.tilt = val;
-
-                                packetCountRef.current++;
-
-                                
-
-                                const rcvEl = document.getElementById('rcv');
-
-                                if (rcvEl) rcvEl.innerText = packetCountRef.current;
 
                                 
 
@@ -667,16 +637,6 @@
 
                                 throttleBtRef.current.throttle = clamped;
 
-
-
-                                throttlePacketCountRef.current++;
-
-                                const thrcvEl = document.getElementById('thrcv');
-
-                                if (thrcvEl) thrcvEl.innerText = throttlePacketCountRef.current;
-
-
-
                                 window.updateThrottleDebug(null, clamped);
 
                             }
@@ -805,7 +765,7 @@
 
                     updateVibeStatus("Sent!", true);
 
-                    updateVibeCount();
+                    vibeCountRef.current++;
 
                     updateLastError("None");
 
@@ -853,11 +813,35 @@
 
 
 
+            // NEW: Flash animation for player car
+
+            const flashPlayerCar = (playerCar) => {
+
+                let flashCount = 0;
+
+                const flashInterval = setInterval(() => {
+
+                    playerCar.visible = !playerCar.visible;
+
+                    flashCount++;
+
+                    if (flashCount >= 8) { // Flash 4 times (8 toggles)
+
+                        clearInterval(flashInterval);
+
+                        playerCar.visible = true;
+
+                    }
+
+                }, 100); // Toggle every 100ms
+
+            };
+
+
+
             useEffect(() => {
 
                 const calibBtn = document.getElementById('calibBtn');
-
-                const testBtn = document.getElementById('testVibeBtn');
 
                 const reconnectBtn = document.getElementById('reconnectBtn');
 
@@ -866,8 +850,6 @@
                 
 
                 if (calibBtn) calibBtn.onclick = sendCalibration;
-
-                if (testBtn) testBtn.onclick = () => sendVibration(false);
 
                 if (reconnectBtn) reconnectBtn.onclick = () => connectBluetooth(false);
 
@@ -1079,7 +1061,13 @@
 
 
 
-                const playerCar = createCar('sport', 0xFF0055); scene.add(playerCar);
+                const playerCar = createCar('sport', 0xFF0055); 
+
+                scene.add(playerCar);
+
+                gameStateRef.current.playerCarRef = playerCar; // Store reference
+
+                
 
                 const road = new THREE.Mesh(new THREE.PlaneGeometry(30, 1000), new THREE.MeshLambertMaterial({ color: 0x444444 }));
 
@@ -1161,55 +1149,33 @@
 
 
 
-                    // =========================
+                    const throttleValue = throttleBtRef.current.throttle;
 
-                    // FORWARD MOVEMENT (UPDATED)
-
-                    // =========================
-
-                    // Keyboard W/ArrowUp still works the same.
-
-                    // New throttle device provides throttle 0.0..1.0:
-
-// =========================
-
-// FORWARD MOVEMENT (ULTRA RESPONSIVE)
-
-// =========================
-
-const throttleValue = throttleBtRef.current.throttle; // 1.0 or 0.0 from encoder
-
-const keyboardActive = (keys['w'] || keys['ArrowUp']);
+                    const keyboardActive = (keys['w'] || keys['ArrowUp']);
 
 
 
-if (keyboardActive) {
+                    if (keyboardActive) {
 
-    // Keyboard - normal acceleration
+                        speed = Math.min(speed + 0.03, 0.9);
 
-    speed = Math.min(speed + 0.03, 0.9);
+                    } 
 
-} 
+                    else if (throttleValue > 0.5) {
 
-else if (throttleValue > 0.5) {
+                        speed = 0.9;
 
-    // Encoder active - INSTANT MAX SPEED
+                    } 
 
-    speed = 0.9;  // Jump straight to max speed
+                    else {
 
-} 
+                        speed *= 0.85;
 
-else {
+                        if (speed < 0.05) speed = 0;
 
-    // Stopped - gradual deceleration (feels more natural than instant stop)
+                    }
 
-    speed *= 0.85;  // Fast slowdown
 
-    if (speed < 0.05) speed = 0;
-
-}
-
-                    // STEERING (unchanged)
 
                     steerTarget = 0;
 
@@ -1401,6 +1367,12 @@ else {
 
                             
 
+                            // Flash player car instead of removing enemy
+
+                            flashPlayerCar(playerCar);
+
+                            
+
                             if (gameStateRef.current.lives <= 0) {
 
                                 console.log("💀 GAME OVER!");
@@ -1436,6 +1408,8 @@ else {
                             }
 
                             
+
+                            // Remove enemy car
 
                             scene.remove(opp.mesh); 
 
@@ -1507,7 +1481,7 @@ else {
 
                             <div style={{fontSize: 32, fontWeight: 'bold', color: '#FFFF00', marginTop: 5}}>High Score: {highScore}</div>
 
-                            <div style={{fontSize: 18, color: '#000000', marginTop: 10, fontWeight: 'bold', textShadow: '1px 1px 0 #fff'}}>Difficulty: {uiDifficulty}</div>
+                            <div style={{fontSize: 18, color: '#000000', marginTop: 10, fontWeight: 'bold', textShadow: '1px 1px 0 #fff'}}>Difficulty 难度: {uiDifficulty}</div>
 
                         </div>
 
@@ -1537,15 +1511,15 @@ else {
 
                         <div style={{marginBottom:'20px'}}>
 
-                            <h3 style={{fontSize:'16px', color:'#aaa'}}>Difficulty Mode</h3>
+                            <h3 style={{fontSize:'16px', color:'#aaa'}}>Difficulty Mode 难度模式</h3>
 
-                            <div className={`menu-opt ${uiDifficulty==='Progressive'?'active':''}`} onClick={()=>changeDifficulty('Progressive')}>Progressive</div>
+                            <div className={`menu-opt ${uiDifficulty==='Progressive'?'active':''}`} onClick={()=>changeDifficulty('Progressive')}>Progressive 渐进式</div>
 
-                            <div className={`menu-opt ${uiDifficulty==='Easy'?'active':''}`} onClick={()=>changeDifficulty('Easy')}>Fixed: Easy</div>
+                            <div className={`menu-opt ${uiDifficulty==='Easy'?'active':''}`} onClick={()=>changeDifficulty('Easy')}>Fixed: Easy 简单</div>
 
-                            <div className={`menu-opt ${uiDifficulty==='Medium'?'active':''}`} onClick={()=>changeDifficulty('Medium')}>Fixed: Medium</div>
+                            <div className={`menu-opt ${uiDifficulty==='Medium'?'active':''}`} onClick={()=>changeDifficulty('Medium')}>Fixed: Medium 中等</div>
 
-                            <div className={`menu-opt ${uiDifficulty==='Hard'?'active':''}`} onClick={()=>changeDifficulty('Hard')}>Fixed: Hard</div>
+                            <div className={`menu-opt ${uiDifficulty==='Hard'?'active':''}`} onClick={()=>changeDifficulty('Hard')}>Fixed: Hard 困难</div>
 
                         </div>
 
@@ -1563,7 +1537,7 @@ else {
 
                             <p style={{marginTop:'20px', fontSize:'18px'}}>High Score: {highScore}</p>
 
-                            <button className="reset-score-btn" onClick={resetHighScore}>Reset High Score</button>
+                            <button className="reset-score-btn" onClick={resetHighScore}>Reset High Score 重置最高分</button>
 
 
 
@@ -1583,8 +1557,6 @@ else {
 
 
 
-                            {/* NEW: throttle pair button */}
-
                             <button 
 
                                 className={`bt-btn ${thBtConnected?'connected':thBtConnecting?'connecting':''}`} 
@@ -1601,7 +1573,7 @@ else {
 
 
 
-                            <button className="big-btn" onClick={onStartGame}>START ENGINE</button>
+                            <button className="big-btn" onClick={onStartGame}>START ENGINE 启动引擎</button>
 
                         </div>
 
@@ -1613,7 +1585,7 @@ else {
 
                         <div id="overlayScreen">
 
-                            <h1 style={{color:'#ff4444', fontSize:'80px', margin:0}}>CRASHED!</h1>
+                            <h1 style={{color:'#ff4444', fontSize:'80px', margin:0}}>CRASHED! 撞车了!</h1>
 
                             <p style={{fontSize:'32px'}}>Score: {score}</p>
 
@@ -1621,7 +1593,7 @@ else {
 
                             <p style={{fontSize:'18px', color:'#aaa'}}>Press SPACE or button to restart</p>
 
-                            <button className="big-btn" onClick={onPlayAgain}>PLAY AGAIN</button>
+                            <button className="big-btn" onClick={onPlayAgain}>PLAY AGAIN 再玩一次</button>
 
                             <button className="restart-btn" onClick={()=>{setGameStarted(false); setGameOver(false); setScore(0); setLives(3);}}>MAIN MENU</button>
 
@@ -1644,4 +1616,3 @@ else {
 </body>
 
 </html>
-
