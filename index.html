@@ -822,7 +822,7 @@
                             <h3>Music 音乐</h3>
                             <div className={`menu-opt ${selectedSong==='song1'?'active':''}`} onClick={()=>setSelectedSong('song1')}>Song 1</div>
                             <div className={`menu-opt ${selectedSong==='song2'?'active':''}`} onClick={()=>setSelectedSong('song2')}>Song 2</div>
-                            <div className={`menu-opt ${isMuted?'active':''}`} onClick={()=>setIsMuted(!isMuted)}>{isMuted ? '🔇 : '🔊'}</div>
+                            <div className={`menu-opt ${isMuted?'active':''}`} onClick={()=>setIsMuted(!isMuted)}>{isMuted ? '🔇' : '🔊'}</div>
                         </div>
                         
                         <div className="menu-opt" style={{background:'#2196F3', marginTop:'auto'}} onClick={toggleMenu}>RESUME GAME</div>
@@ -872,6 +872,7 @@
     </script>
 </body>
 </html>
+
 
 
 
