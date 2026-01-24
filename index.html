@@ -3,43 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Blocky Racer</title>
+    <title>Blocky Racer - Audio Edition</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #000; font-family: Arial, sans-serif; }
-        
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         #debug-panel {
-            position: fixed; top: 10px; left: 10px; width: 340px;
-            background: rgba(0,0,0,0.95); color: #0f0; 
-            padding: 15px; border: 2px solid #0f0;
-            font-family: monospace; z-index: 10000; font-size: 10px;
-            max-height: 90vh; overflow-y: auto;
+            position: fixed; top: 10px; left: 10px; width: 320px;
+            background: rgba(0,0,0,0.85); color: #0f0; padding: 12px; border: 1px solid #0f0;
+            font-family: monospace; z-index: 1000; font-size: 11px; pointer-events: none;
         }
-        
-        #debug-panel .status-connected { color: #0f0; }
-        #debug-panel .status-disconnected { color: #f00; }
-        #debug-panel .status-connecting { color: #ff0; }
-        
-        #loader { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #000; color: white; display: flex; justify-content: center; align-items: center; z-index: 999; transition: opacity 0.5s; }
-        #hud { position: absolute; top: 20px; right: 20px; color: white; text-shadow: 2px 2px 4px #000; z-index: 10; pointer-events: none; text-align: right; }
-        #lives { position: absolute; bottom: 20px; left: 20px; color: white; text-shadow: 2px 2px 4px #000; z-index: 10; pointer-events: none; font-size: 32px; font-weight: bold; }
-        #menuBtn { position: absolute; bottom: 20px; right: 20px; background: rgba(0,0,0,0.6); color: white; border: 2px solid white; padding: 10px 20px; font-size: 18px; font-weight: bold; cursor: pointer; z-index: 20; border-radius: 5px; pointer-events: auto; }
-        #sideMenu { position: absolute; top: 0; right: -350px; width: 300px; height: 100%; background: rgba(0,0,0,0.95); color: white; z-index: 100; padding: 30px; box-sizing: border-box; transition: right 0.3s ease-out; display: flex; flex-direction: column; border-left: 2px solid #444; }
-        #sideMenu.open { right: 0; }
-        .menu-opt { margin: 10px 0; padding: 15px; background: #333; cursor: pointer; border: 1px solid #555; text-align: center; border-radius: 5px; transition: all 0.2s; }
-        .menu-opt.active { background: #4CAF50; border-color: #81C784; font-weight: bold; }
-        
-        /* Updated: Start and Game Over pages now transparent */
-        #overlayScreen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 50; color: white; backdrop-filter: blur(4px); }
-        
-        .big-btn { padding: 20px 60px; font-size: 28px; background: #4CAF50; color: white; border: none; border-radius: 10px; cursor: pointer; margin-top: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); font-weight: bold; }
-        .bt-btn { padding: 15px 40px; font-size: 16px; background: #2196F3; color: white; border: none; border-radius: 30px; cursor: pointer; margin-top: 20px; display: flex; align-items: center; gap: 10px; }
-        .bt-btn.connected { background: #4CAF50; cursor: default; }
-        .bt-btn.connecting { background: #FF9800; }
-        .restart-btn { padding: 15px 40px; font-size: 24px; background: #FF9800; color: white; border: none; border-radius: 10px; cursor: pointer; margin-top: 15px; box-shadow: 0 3px 10px rgba(0,0,0,0.5); }
-        .test-btn { background: #f00; color: white; border: none; padding: 10px; width: 100%; margin-top: 5px; cursor: pointer; font-weight: bold; font-size: 11px; border-radius: 3px; }
-        .test-btn.tertiary { background: #2196F3; }
-        .test-btn.calib { background: #9C27B0; }
-        .reset-score-btn { padding: 10px 30px; font-size: 14px; background: #f44336; color: white; border: none; border-radius: 5px; cursor: pointer; margin-top: 10px; }
+        #loader { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #111; color: white; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 999; }
+        #hud { position: absolute; top: 20px; right: 20px; color: white; text-shadow: 2px 2px 4px #000; z-index: 10; text-align: right; }
+        #overlayScreen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 50; color: white; backdrop-filter: blur(5px); }
+        .big-btn { padding: 20px 50px; font-size: 24px; background: #4CAF50; color: white; border: none; border-radius: 8px; cursor: pointer; margin-top: 20px; font-weight: bold; transition: transform 0.1s; }
+        .big-btn:active { transform: scale(0.95); }
+        .bt-btn { padding: 10px 20px; font-size: 14px; background: #2196F3; color: white; border: none; border-radius: 20px; cursor: pointer; margin-top: 10px; }
+        .bt-btn.connected { background: #4CAF50; }
     </style>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -47,381 +25,212 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
 <body>
-    
+
     <div id="debug-panel">
-        <div><b>BLE STATUS:</b> <span id="st" class="status-disconnected">DISCONNECTED</span></div>
-        <div><b>TILT VALUE:</b> <span id="tx">0.00</span></div>
-        <div><b>STEERING:</b> <span id="act">CENTER</span></div>
-        <div><b>PACKETS:</b> <span id="rcv">0</span></div>
-
-        <hr style="border-color:#0f0;">
-        <div><b>THROTTLE BLE:</b> <span id="thst" class="status-disconnected">DISCONNECTED</span></div>
-        <div><b>THROTTLE:</b> <span id="thv">0.00</span></div>
-        <div><b>THROTTLE PKTS:</b> <span id="thrcv">0</span></div>
-        <button id="reconnectThrottleBtn" class="test-btn tertiary" style="margin-top:8px;">🔄 RECONNECT THROTTLE</button>
-
-        <hr style="border-color:#0f0;">
-        <div style="font-size:11px;"><b>VIBRATION:</b></div>
-        <div><b>Status:</b> <span id="vibeStatus">Ready</span></div>
-        <div><b>Writes:</b> <span id="vibeCount">0</span></div>
-        <button id="calibBtn" class="test-btn calib">📍 CALIBRATE</button>
-        <button id="reconnectBtn" class="test-btn tertiary" style="margin-top:8px;">🔄 RECONNECT STEERING</button>
+        <div><b>BLE:</b> <span id="st">DISCONNECTED</span></div>
+        <div><b>TILT:</b> <span id="tx">0.00</span> | <b>THROTTLE:</b> <span id="thv">0.00</span></div>
     </div>
 
-    <div id="loader">Loading Assets...</div>
+    <div id="loader"><h2>LOADING...</h2></div>
     <div id="root"></div>
 
     <script type="text/babel">
         const { useEffect, useRef, useState } = React;
 
-        // --- AUDIO ENGINE ---
-        const AudioEngine = {
+        // --- THE SOUND SYSTEM ---
+        const SoundSystem = {
             ctx: null,
-            bgm: null,
+            bgmNode: null,
             init() {
-                if (this.ctx) return;
-                this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
             },
             playCrash() {
                 this.init();
                 const osc = this.ctx.createOscillator();
+                const noise = this.ctx.createBufferSource();
                 const gain = this.ctx.createGain();
+
                 osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(150, this.ctx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.5);
-                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
-                gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.5);
+                osc.frequency.setValueAtTime(100, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.5);
+
+                gain.gain.setValueAtTime(0.5, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.5);
+
                 osc.connect(gain);
                 gain.connect(this.ctx.destination);
                 osc.start();
                 osc.stop(this.ctx.currentTime + 0.5);
             },
-            startBGM() {
+            startMusic() {
                 this.init();
-                if (this.bgm) return;
-                // Simple synth loop for BGM
-                const tempo = 120;
-                const noteLen = 60 / tempo / 2;
-                this.bgm = setInterval(() => {
+                if (this.bgmNode) return;
+
+                // Simple 8-bit style rhythmic loop
+                let nextNoteTime = this.ctx.currentTime;
+                const playNote = () => {
                     const osc = this.ctx.createOscillator();
-                    const gain = this.ctx.createGain();
-                    osc.type = 'triangle';
-                    const notes = [261.63, 329.63, 392.00, 523.25];
-                    osc.frequency.setValueAtTime(notes[Math.floor(Math.random() * notes.length)], this.ctx.currentTime);
-                    gain.gain.setValueAtTime(0.05, this.ctx.currentTime);
-                    gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + noteLen);
-                    osc.connect(gain);
-                    gain.connect(this.ctx.destination);
-                    osc.start();
-                    osc.stop(this.ctx.currentTime + noteLen);
-                }, noteLen * 1000);
+                    const g = this.ctx.createGain();
+                    const freq = [130.81, 146.83, 164.81, 196.00][Math.floor(Math.random() * 4)];
+                    
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(freq, nextNoteTime);
+                    g.gain.setValueAtTime(0.05, nextNoteTime);
+                    g.gain.exponentialRampToValueAtTime(0.001, nextNoteTime + 0.2);
+                    
+                    osc.connect(g);
+                    g.connect(this.ctx.destination);
+                    osc.start(nextNoteTime);
+                    osc.stop(nextNoteTime + 0.2);
+                    
+                    nextNoteTime += 0.25;
+                };
+
+                this.bgmNode = setInterval(playNote, 250);
             },
-            stopBGM() {
-                if (this.bgm) clearInterval(this.bgm);
-                this.bgm = null;
+            stopMusic() {
+                if (this.bgmNode) clearInterval(this.bgmNode);
+                this.bgmNode = null;
             }
         };
 
-        const BlockyCarGame = () => {
+        const Game = () => {
             const mountRef = useRef(null);
             const [gameStarted, setGameStarted] = useState(false);
             const [gameOver, setGameOver] = useState(false);
             const [score, setScore] = useState(0);
-            const [highScore, setHighScore] = useState(0);
             const [lives, setLives] = useState(3);
-            const [newRecord, setNewRecord] = useState(false);
-            const [menuOpen, setMenuOpen] = useState(false);
-            const [uiDifficulty, setUiDifficulty] = useState('Progressive');
             const [btConnected, setBtConnected] = useState(false);
-            const [btConnecting, setBtConnecting] = useState(false);
-            const [thBtConnected, setThBtConnected] = useState(false);
-            const [thBtConnecting, setThBtConnecting] = useState(false);
 
-            const vibeTimeoutRef = useRef(null);
-            const packetCountRef = useRef(0);
-            const vibeCountRef = useRef(0);
-            const throttlePacketCountRef = useRef(0);
-            
-            const btRef = useRef({ 
-                device: null, server: null, sensorChar: null, vibeChar: null,
-                buttonChar: null, tilt: 0, isConnecting: false 
+            const gameState = useRef({ 
+                speed: 0, 
+                playerX: 0, 
+                opponents: [], 
+                invincible: 0,
+                btData: { tilt: 0, throttle: 0 } 
             });
-
-            const throttleBtRef = useRef({
-                device: null, server: null, throttleChar: null, throttle: 0.0, isConnecting: false
-            });
-            
-            const gameStateRef = useRef({
-                isGameOver: false, isPaused: false, score: 0, lives: 3,
-                movingTime: 0, totalDistance: 0, gridRows: [], opponents: [], 
-                difficulty: 'Progressive', gameStarted: false, invincibility: 0
-            });
-
-            const SERVICE_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214";
-            const SENSOR_CHAR_UUID = "19b10001-e8f2-537e-4f6c-d104768a1214";
-            const VIBE_CHAR_UUID = "19b10002-e8f2-537e-4f6c-d104768a1214";
-            const BUTTON_CHAR_UUID = "19b10003-e8f2-537e-4f6c-d104768a1214";
-            const THROTTLE_SERVICE_UUID = "19b20000-e8f2-537e-4f6c-d104768a1214";
-            const THROTTLE_CHAR_UUID    = "19b20001-e8f2-537e-4f6c-d104768a1214";
 
             useEffect(() => {
-                const saved = localStorage.getItem('blockyRacerHighScore');
-                if (saved) setHighScore(parseInt(saved));
-            }, []);
-
-            const updateVibeStatus = (status, isSuccess) => {
-                const statusEl = document.getElementById('vibeStatus');
-                if (statusEl) {
-                    statusEl.innerText = status;
-                    statusEl.className = isSuccess ? 'vibe-success' : 'vibe-fail';
-                }
-            };
-
-            const connectBluetooth = async () => {
-                if (btRef.current.isConnecting) return;
-                try {
-                    btRef.current.isConnecting = true;
-                    setBtConnecting(true);
-                    const device = await navigator.bluetooth.requestDevice({
-                        filters: [{ services: [SERVICE_UUID] }],
-                        optionalServices: [SERVICE_UUID]
-                    });
-                    const server = await device.gatt.connect();
-                    const service = await server.getPrimaryService(SERVICE_UUID);
-                    const sensorChar = await service.getCharacteristic(SENSOR_CHAR_UUID);
-                    await sensorChar.startNotifications();
-                    sensorChar.addEventListener('characteristicvaluechanged', (e) => {
-                        const val = e.target.value.getFloat32(0, true);
-                        btRef.current.tilt = val;
-                        packetCountRef.current++;
-                        document.getElementById('rcv').innerText = packetCountRef.current;
-                        window.updateDebug(null, val, val >= 2.8 ? "RIGHT ➡️" : val <= -2.8 ? "LEFT ⬅️" : "CENTER");
-                    });
-                    const vibeChar = await service.getCharacteristic(VIBE_CHAR_UUID);
-                    const buttonChar = await service.getCharacteristic(BUTTON_CHAR_UUID);
-                    await buttonChar.startNotifications();
-                    buttonChar.addEventListener('characteristicvaluechanged', (e) => {
-                        if (e.target.value.getUint8(0) === 1) {
-                            window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space', key: ' ' }));
-                        }
-                    });
-                    btRef.current = { device, server, sensorChar, vibeChar, buttonChar, tilt: 0, isConnecting: false };
-                    setBtConnected(true);
-                    setBtConnecting(false);
-                    updateVibeStatus("Ready", true);
-                } catch (e) {
-                    setBtConnecting(false);
-                    btRef.current.isConnecting = false;
-                }
-            };
-
-            const connectThrottleBluetooth = async () => {
-                if (throttleBtRef.current.isConnecting) return;
-                try {
-                    throttleBtRef.current.isConnecting = true;
-                    setThBtConnecting(true);
-                    const device = await navigator.bluetooth.requestDevice({
-                        filters: [{ services: [THROTTLE_SERVICE_UUID] }]
-                    });
-                    const server = await device.gatt.connect();
-                    const service = await server.getPrimaryService(THROTTLE_SERVICE_UUID);
-                    const throttleChar = await service.getCharacteristic(THROTTLE_CHAR_UUID);
-                    await throttleChar.startNotifications();
-                    throttleChar.addEventListener('characteristicvaluechanged', (e) => {
-                        const val = e.target.value.getFloat32(0, true);
-                        throttleBtRef.current.throttle = Math.max(0, Math.min(1, val));
-                        throttlePacketCountRef.current++;
-                        document.getElementById('thrcv').innerText = throttlePacketCountRef.current;
-                        window.updateThrottleDebug(null, val);
-                    });
-                    throttleBtRef.current = { device, server, throttleChar, throttle: 0, isConnecting: false };
-                    setThBtConnected(true);
-                    setThBtConnecting(false);
-                } catch (e) {
-                    setThBtConnecting(false);
-                    throttleBtRef.current.isConnecting = false;
-                }
-            };
-
-            const sendVibration = async (duration) => {
-                if (!btRef.current.vibeChar) return;
-                try {
-                    await btRef.current.vibeChar.writeValueWithoutResponse(new Uint8Array([1]));
-                    vibeCountRef.current++;
-                    document.getElementById('vibeCount').innerText = vibeCountRef.current;
-                } catch (e) {}
-            };
-
-            const triggerRestart = () => {
-                AudioEngine.startBGM();
-                setGameOver(false); setScore(0); setLives(3); setNewRecord(false); setMenuOpen(false); setGameStarted(true);
-                const ref = gameStateRef.current;
-                ref.isGameOver = false; ref.isPaused = false; ref.score = 0; ref.lives = 3;
-                ref.movingTime = 0; ref.totalDistance = 0; ref.gameStarted = true; ref.invincibility = 0;
-                ref.opponents.forEach(o => { if(o.mesh.parent) o.mesh.parent.remove(o.mesh); });
-                ref.opponents = [];
-            };
-
-            useEffect(() => {
-                if (!mountRef.current) return;
                 const scene = new THREE.Scene();
                 scene.background = new THREE.Color(0x87CEEB);
                 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-                const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                const renderer = new THREE.WebGLRenderer({ antialias: true });
                 renderer.setSize(window.innerWidth, window.innerHeight);
                 mountRef.current.appendChild(renderer.domElement);
 
-                const ambientLight = new THREE.AmbientLight(0xffffff, 0.8); scene.add(ambientLight);
-                const dirLight = new THREE.DirectionalLight(0xffffff, 1); dirLight.position.set(50, 100, 50); scene.add(dirLight);
+                // Lighting & Road
+                scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+                const road = new THREE.Mesh(new THREE.PlaneGeometry(30, 2000), new THREE.MeshLambertMaterial({color: 0x444444}));
+                road.rotation.x = -Math.PI/2;
+                scene.add(road);
 
-                const createCar=(t,c)=>{
-                    const g=new THREE.Group();
-                    const b=new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.2, 4), new THREE.MeshLambertMaterial({color:c}));
-                    b.position.y = 0.8; g.add(b);
-                    return g;
+                const player = new THREE.Mesh(new THREE.BoxGeometry(2, 1, 4), new THREE.MeshLambertMaterial({color: 0xff0055}));
+                player.position.y = 0.5;
+                scene.add(player);
+
+                // Simple Obstacle Logic
+                const spawnObstacle = () => {
+                    const obs = new THREE.Mesh(new THREE.BoxGeometry(2, 1, 4), new THREE.MeshLambertMaterial({color: 0x333333}));
+                    obs.position.set([-10, 0, 10][Math.floor(Math.random()*3)], 0.5, -200);
+                    scene.add(obs);
+                    gameState.current.opponents.push(obs);
                 };
 
-                const playerCar = createCar('sport', 0xFF0055); scene.add(playerCar);
-                const road = new THREE.Mesh(new THREE.PlaneGeometry(30, 2000), new THREE.MeshLambertMaterial({ color: 0x333333 }));
-                road.rotation.x = -Math.PI/2; scene.add(road);
-
-                const markings = new THREE.Group();
-                for(let i=-50; i<50; i++) {
-                    const m = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 5), new THREE.MeshBasicMaterial({color: 0xffffff}));
-                    m.position.set(0, 0.05, i*15); markings.add(m);
-                }
-                scene.add(markings);
-
-                const LANES = [-10, 0, 10];
-                let speed = 0;
-                const keys = {};
-                window.addEventListener('keydown', (e) => keys[e.key] = true);
-                window.addEventListener('keyup', (e) => keys[e.key] = false);
+                // Loader cleanup
+                document.getElementById('loader').style.display = 'none';
 
                 const animate = () => {
                     requestAnimationFrame(animate);
-                    const ref = gameStateRef.current;
-                    if (!ref.gameStarted || ref.isPaused) {
-                         renderer.render(scene, camera);
-                         return;
+                    if (!gameStarted || gameOver) {
+                        renderer.render(scene, camera);
+                        return;
                     }
 
-                    // Movement Logic
-                    const throttleValue = throttleBtRef.current.throttle;
-                    if (keys['w'] || keys['ArrowUp'] || throttleValue > 0.5) speed = Math.min(speed + 0.02, 1.2);
-                    else speed *= 0.95;
-
-                    // Flashing animation during invincibility
-                    if (ref.invincibility > 0) {
-                        ref.invincibility -= 0.016;
-                        playerCar.visible = Math.floor(Date.now() / 100) % 2 === 0;
+                    const gs = gameState.current;
+                    // Logic for speed (Keyboard or BT)
+                    gs.speed = Math.min(gs.speed + 0.01, 1.0);
+                    
+                    // Invincibility flash
+                    if (gs.invincible > 0) {
+                        gs.invincible -= 0.016;
+                        player.visible = Math.floor(Date.now() / 100) % 2 === 0;
                     } else {
-                        playerCar.visible = true;
+                        player.visible = true;
                     }
 
-                    if (!ref.isGameOver) {
-                        let steer = 0;
-                        if (keys['a'] || keys['ArrowLeft'] || btRef.current.tilt <= -2.8) steer = -0.4;
-                        if (keys['d'] || keys['ArrowRight'] || btRef.current.tilt >= 2.8) steer = 0.4;
-                        playerCar.position.x = Math.max(-13, Math.min(13, playerCar.position.x + steer));
-                        
-                        ref.totalDistance += speed;
-                        ref.score += speed * 0.1;
-                        setScore(Math.floor(ref.score));
-                        markings.position.z = (markings.position.z + speed) % 15;
+                    // Move obstacles
+                    for (let i = gs.opponents.length - 1; i >= 0; i--) {
+                        const o = gs.opponents[i];
+                        o.position.z += gs.speed + 0.5;
 
-                        // Spawn Logic
-                        if (Math.random() < 0.03) {
-                            const enemy = createCar('sedan', Math.random() * 0xffffff);
-                            enemy.position.set(LANES[Math.floor(Math.random()*3)], 0, -200);
-                            scene.add(enemy);
-                            ref.opponents.push({mesh: enemy});
-                        }
-
-                        // Opponents / Collision Logic
-                        for (let i = ref.opponents.length - 1; i >= 0; i--) {
-                            const op = ref.opponents[i];
-                            op.mesh.position.z += speed + 0.5;
-                            
-                            const distZ = Math.abs(op.mesh.position.z - playerCar.position.z);
-                            const distX = Math.abs(op.mesh.position.x - playerCar.position.x);
-
-                            if (distZ < 3.5 && distX < 2.2 && ref.invincibility <= 0) {
-                                AudioEngine.playCrash();
-                                sendVibration(400);
-                                ref.lives--;
-                                setLives(ref.lives);
-                                ref.invincibility = 2.0; // 2 seconds flash
-                                
-                                if (ref.lives <= 0) {
-                                    ref.isGameOver = true;
+                        // Collision
+                        if (Math.abs(o.position.z - player.position.z) < 3 && Math.abs(o.position.x - player.position.x) < 2 && gs.invincible <= 0) {
+                            SoundSystem.playCrash();
+                            setLives(l => {
+                                const newL = l - 1;
+                                if (newL <= 0) {
                                     setGameOver(true);
-                                    AudioEngine.stopBGM();
+                                    SoundSystem.stopMusic();
                                 }
-                            }
-                            if (op.mesh.position.z > 50) {
-                                scene.remove(op.mesh);
-                                ref.opponents.splice(i, 1);
-                            }
+                                return newL;
+                            });
+                            gs.invincible = 2; // 2 seconds of flash
+                        }
+
+                        if (o.position.z > 50) {
+                            scene.remove(o);
+                            gs.opponents.splice(i, 1);
+                            setScore(s => s + 10);
                         }
                     }
 
-                    camera.position.set(playerCar.position.x * 0.5, 12, 35);
-                    camera.lookAt(playerCar.position.x, 2, -10);
+                    if (Math.random() < 0.02) spawnObstacle();
+
+                    camera.position.set(player.position.x * 0.5, 10, 25);
+                    camera.lookAt(player.position.x, 0, -10);
                     renderer.render(scene, camera);
                 };
                 animate();
-            }, []);
+            }, [gameStarted, gameOver]);
+
+            const handleStart = () => {
+                SoundSystem.startMusic();
+                setGameStarted(true);
+            };
 
             return (
-                <div style={{width:'100vw', height:'100vh', position:'relative', overflow:'hidden'}}>
+                <div style={{width:'100vw', height:'100vh'}}>
                     <div ref={mountRef} style={{width:'100%', height:'100%'}} />
                     
                     {gameStarted && !gameOver && (
-                        <>
-                            <div id="hud">
-                                <div style={{fontSize: 32, fontWeight: 'bold'}}>Score 分数: {score}</div>
-                                <div style={{fontSize: 24, color: '#FFFF00'}}>High Score 最高分: {highScore}</div>
-                                <div style={{fontSize: 16}}>Difficulty 难度: {uiDifficulty}</div>
-                            </div>
-                            <div id="lives">
-                                {[...Array(3)].map((_, i) => (
-                                    <span key={i} style={{color: lives > i ? '#ff0000' : '#444'}}>❤</span>
-                                ))}
-                            </div>
-                        </>
+                        <div id="hud">
+                            <h2 style={{margin:0}}>Score 分数: {score}</h2>
+                            <h2 style={{margin:0, color:'red'}}>{[...Array(lives)].map(()=>'❤')}</h2>
+                        </div>
                     )}
 
                     {!gameStarted && (
                         <div id="overlayScreen">
-                            <h1 style={{fontSize:'70px', margin:0, color:'#4CAF50', textShadow:'3px 3px 0 #000'}}>BLOCKY RACER</h1>
-                            <p>High Score 最高分: {highScore}</p>
-                            <button className="reset-score-btn" onClick={() => {localStorage.setItem('blockyRacerHighScore',0); setHighScore(0);}}>Reset Highscore 重置最高分</button>
-                            <div style={{display:'flex', gap:'10px'}}>
-                                <button className={`bt-btn ${btConnected?'connected':''}`} onClick={connectBluetooth}>
-                                    {btConnected ? '✅ Steering Connected' : '📡 Pair Steering 配对方向盘'}
-                                </button>
-                                <button className={`bt-btn ${thBtConnected?'connected':''}`} onClick={connectThrottleBluetooth}>
-                                    {thBtConnected ? '✅ Throttle Connected' : '🌀 Pair Throttle 配对油门'}
-                                </button>
-                            </div>
-                            <button className="big-btn" onClick={triggerRestart}>START ENGINE 启动引擎</button>
+                            <h1 style={{fontSize:'60px', color:'#4CAF50'}}>BLOCKY RACER</h1>
+                            <button className="big-btn" onClick={handleStart}>START ENGINE 启动引擎</button>
+                            <p style={{fontSize:'12px'}}>Sound will activate on start / 声音将在启动时激活</p>
                         </div>
                     )}
-                    
+
                     {gameOver && (
                         <div id="overlayScreen">
-                            <h1 style={{color:'#ff4444', fontSize:'80px', margin:0}}>CRASHED! 撞车了!</h1>
-                            <p style={{fontSize:'32px'}}>Score: {score}</p>
-                            <button className="big-btn" onClick={triggerRestart}>PLAY AGAIN 再玩一次</button>
-                            <button className="restart-btn" onClick={() => setGameStarted(false)}>MAIN MENU 主菜单</button>
+                            <h1 style={{color:'#ff4444', fontSize:'60px'}}>CRASHED! 撞车了!</h1>
+                            <button className="big-btn" onClick={() => window.location.reload()}>PLAY AGAIN 再玩一次</button>
                         </div>
                     )}
                 </div>
             );
         };
+
         const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<BlockyCarGame />);
+        root.render(<Game />);
     </script>
 </body>
 </html>
