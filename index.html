@@ -545,24 +545,10 @@
 
 <body>
     <div id="debug-panel">
-        <div><b>BLE STATUS:</b> <span id="st" class="status-disconnected">DISCONNECTED</span></div>
-        <div><b>TILT VALUE:</b> <span id="tx">0.00</span></div>
-        <div><b>STEERING:</b> <span id="act">CENTER</span></div>
-        <div><b>PACKETS:</b> <span id="rcv">0</span></div>
-        <hr style="border-color:#0f0;">
-        <div><b>THROTTLE BLE:</b> <span id="thst" class="status-disconnected">DISCONNECTED</span></div>
-        <div><b>THROTTLE:</b> <span id="thv">0.00</span></div>
-        <div><b>THROTTLE PKTS:</b> <span id="thrcv">0</span></div>
-        <button id="reconnectThrottleBtn" class="test-btn tertiary" style="margin-top:8px;">🔄 RECONNECT
-            THROTTLE</button>
-        <hr style="border-color:#0f0;">
-        <div style="font-size:11px;"><b>VIBRATION:</b></div>
-        <div><b>Status:</b> <span id="vibeStatus">Ready</span></div>
-        <div><b>Writes:</b> <span id="vibeCount">0</span></div>
-        <div><b>Last:</b> <span id="lastError" style="font-size:9px;">None</span></div>
+<div id="debug-panel">
         <button id="calibBtn" class="test-btn calib">📍 CALIBRATE</button>
-        <button id="testVibeBtn" class="test-btn">🔔 TEST VIBE</button>
-        <button id="reconnectBtn" class="test-btn tertiary" style="margin-top:8px;">🔄 RECONNECT</button>
+        <button id="reconnectBtn" class="test-btn tertiary">🔄 RECONNECT STEERING</button>
+        <button id="reconnectThrottleBtn" class="test-btn tertiary" style="margin-top:5px;">🔄 RECONNECT THROTTLE</button>
     </div>
     <div id="loader">Loading Assets...</div>
 
@@ -2541,3 +2527,4 @@
 </body>
 
 </html>
+
