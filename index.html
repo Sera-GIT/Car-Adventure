@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Blocky Racer</title>
+    <title>Car Adventure</title>
     <style>
         body {
             margin: 0;
@@ -18,10 +18,10 @@
             top: 10px;
             left: 10px;
             width: 340px;
-            background: rgba(0, 0, 0, 0.95);
+            background: transparent;
             color: #0f0;
             padding: 15px;
-            border: 2px solid #0f0;
+            border: none;
             font-family: monospace;
             z-index: 10000;
             font-size: 10px;
@@ -67,12 +67,16 @@
         #hud {
             position: absolute;
             top: 20px;
-            right: 20px;
+            left: 20px;
             color: white;
             text-shadow: 2px 2px 4px #000;
             z-index: 10;
             pointer-events: none;
-            text-align: right;
+            text-align: left;
+        }
+
+        #hud button {
+            pointer-events: auto;
         }
 
         #lives {
@@ -325,134 +329,20 @@
             }
         }
 
-        @keyframes screen-shake {
 
-            0%,
-            100% {
-                transform: translate(0, 0);
-            }
-
-            10% {
-                transform: translate(-5px, -3px);
-            }
-
-            20% {
-                transform: translate(5px, 3px);
-            }
-
-            30% {
-                transform: translate(-3px, 5px);
-            }
-
-            40% {
-                transform: translate(3px, -5px);
-            }
-
-            50% {
-                transform: translate(-5px, 3px);
-            }
-
-            60% {
-                transform: translate(5px, -3px);
-            }
-
-            70% {
-                transform: translate(-3px, -5px);
-            }
-
-            80% {
-                transform: translate(3px, 5px);
-            }
-
-            90% {
-                transform: translate(-5px, -3px);
-            }
-        }
-
-        .shake {
-            animation: screen-shake 0.4s ease-out;
-        }
 
         #time-display {
-            position: fixed;
-            top: 70px;
-            left: 20px;
-            color: white;
-            font-size: 18px;
-            font-weight: bold;
-            text-shadow: 2px 2px 4px #000;
-            z-index: 10;
-            pointer-events: none;
+            display: none;
         }
 
-        #speedometer {
-            position: fixed;
-            bottom: 70px;
-            left: 20px;
-            width: 100px;
-            height: 100px;
-            background: radial-gradient(circle, rgba(0, 0, 0, 0.9) 0%, rgba(30, 30, 30, 0.95) 70%, rgba(50, 50, 50, 0.9) 100%);
-            border-radius: 50%;
-            border: 3px solid #444;
-            box-shadow: 0 0 15px rgba(0, 0, 0, 0.8), inset 0 0 20px rgba(0, 0, 0, 0.5);
-            z-index: 15;
-            pointer-events: none;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-        }
 
-        #speedometer .speed-value {
-            font-size: 26px;
-            font-weight: bold;
-            color: #00ff00;
-            text-shadow: 0 0 10px #00ff00;
-            font-family: 'Courier New', monospace;
-        }
 
-        #speedometer .speed-label {
-            font-size: 8px;
-            color: #888;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
 
-        #speedometer .speed-bar {
-            position: absolute;
-            bottom: 6px;
-            left: 10%;
-            width: 80%;
-            height: 5px;
-            background: #222;
-            border-radius: 3px;
-            overflow: hidden;
-        }
-
-        #speedometer .speed-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #00ff00, #ffff00, #ff0000);
-            transition: width 0.1s ease-out;
-            border-radius: 3px;
-        }
-
-        #gear-indicator {
-            position: fixed;
-            bottom: 175px;
-            left: 55px;
-            color: #ff6600;
-            font-size: 20px;
-            font-weight: bold;
-            font-family: 'Courier New', monospace;
-            text-shadow: 0 0 10px #ff6600;
-            z-index: 15;
-            pointer-events: none;
-        }
 
         #bpm-tracker {
             position: fixed;
-            bottom: 220px;
-            left: 20px;
+            top: 20px;
+            right: 20px;
             width: 100px;
             background: rgba(0, 0, 0, 0.85);
             border-radius: 10px;
@@ -544,11 +434,7 @@
 </head>
 
 <body>
-    <div id="debug-panel">
-        <button id="calibBtn" class="test-btn calib">📍 CALIBRATE</button>
-        <button id="reconnectBtn" class="test-btn tertiary">🔄 RECONNECT STEERING</button>
-        <button id="reconnectThrottleBtn" class="test-btn tertiary" style="margin-top:5px;">🔄 RECONNECT THROTTLE</button>
-    </div>
+
     <div id="loader">Loading Assets...</div>
 
     <div id="speed-lines"></div>
@@ -559,14 +445,6 @@
         <span class="bpm-value" id="bpm-value">--</span>
         <span class="bpm-label">BPM</span>
     </div>
-    <div id="speedometer" style="display: none;">
-        <span class="speed-value" id="speed-value">0</span>
-        <span class="speed-label">km/h</span>
-        <div class="speed-bar">
-            <div class="speed-fill" id="speed-fill"></div>
-        </div>
-    </div>
-    <div id="gear-indicator" style="display: none;">N</div>
     <div id="root"></div>
     <script type="text/babel">
         const { useEffect, useRef, useState } = React;
@@ -628,13 +506,14 @@
             const [btConnecting, setBtConnecting] = useState(false);
             const [thBtConnected, setThBtConnected] = useState(false);
             const [thBtConnecting, setThBtConnecting] = useState(false);
+            const [calibrated, setCalibrated] = useState(false);
 
             // Translations
             const translations = {
-                en: { score: 'Score', highScore: 'High Score', difficulty: 'Difficulty', paused: 'PAUSED', settings: 'Settings', volume: 'Volume', sensitivity: 'Pedal Sensitivity', difficultyMode: 'Difficulty Mode', progressive: 'Progressive', easy: 'Easy', medium: 'Medium', hard: 'Hard', resume: 'RESUME GAME', backToHub: 'BACK TO HUB', title: 'BLOCKY RACER', resetScore: 'Reset High Score', pairSteering: 'PAIR STEERING CONTROLLER', pairThrottle: 'PAIR THROTTLE (ENCODER)', connecting: 'CONNECTING...', paired: 'PAIRED', startEngine: 'START ENGINE', crashed: 'CRASHED!', newRecord: 'NEW HIGH SCORE!', pressRestart: 'Press SPACE or button to restart', playAgain: 'PLAY AGAIN', mainMenu: 'MAIN MENU', language: 'Language', menu: 'MENU', fixed: 'Fixed' },
-                zh: { score: '分数', highScore: '最高分', difficulty: '难度', paused: '暂停', settings: '设置', volume: '音量', sensitivity: '踏板灵敏度', difficultyMode: '难度模式', progressive: '渐进', easy: '简单', medium: '中等', hard: '困难', resume: '继续游戏', backToHub: '返回主页', title: '方块赛车', resetScore: '重置最高分', pairSteering: '配对方向盘', pairThrottle: '配对油门', connecting: '连接中...', paired: '已配对', startEngine: '开始游戏', crashed: '撞车了！', newRecord: '新纪录！', pressRestart: '按空格键或按钮重新开始', playAgain: '再玩一次', mainMenu: '主菜单', language: '语言', menu: '菜单', fixed: '固定' },
-                ms: { score: 'Skor', highScore: 'Skor Tertinggi', difficulty: 'Kesukaran', paused: 'DIJEDA', settings: 'Tetapan', volume: 'Kelantangan', sensitivity: 'Sensitiviti Pedal', difficultyMode: 'Mod Kesukaran', progressive: 'Progresif', easy: 'Mudah', medium: 'Sederhana', hard: 'Sukar', resume: 'SAMBUNG PERMAINAN', backToHub: 'KEMBALI KE HUB', title: 'BLOCKY RACER', resetScore: 'Set Semula Skor', pairSteering: 'PAIR STERENG', pairThrottle: 'PAIR THROTTLE', connecting: 'MENYAMBUNG...', paired: 'DIPASANGKAN', startEngine: 'MULA ENJIN', crashed: 'TERLANGGAR!', newRecord: 'SKOR TERTINGGI BARU!', pressRestart: 'Tekan SPACE atau butang untuk mula semula', playAgain: 'MAIN LAGI', mainMenu: 'MENU UTAMA', language: 'Bahasa', menu: 'MENU', fixed: 'Tetap' },
-                hi: { score: 'स्कोर', highScore: 'उच्च स्कोर', difficulty: 'कठिनाई', paused: 'रुका हुआ', settings: 'सेटिंग्स', volume: 'आवाज़', sensitivity: 'पैडल संवेदनशीलता', difficultyMode: 'कठिनाई मोड', progressive: 'प्रगतिशील', easy: 'आसान', medium: 'मध्यम', hard: 'कठिन', resume: 'खेल जारी रखें', backToHub: 'हब पर वापस', title: 'ब्लॉकी रेसर', resetScore: 'स्कोर रीसेट करें', pairSteering: 'स्टीयरिंग जोड़ें', pairThrottle: 'थ्रॉटल जोड़ें', connecting: 'कनेक्ट हो रहा...', paired: 'जुड़ा हुआ', startEngine: 'इंजन चालू करें', crashed: 'टक्कर!', newRecord: 'नया रिकॉर्ड!', pressRestart: 'पुनः आरंभ करने के लिए SPACE दबाएं', playAgain: 'फिर से खेलें', mainMenu: 'मुख्य मेनू', language: 'भाषा', menu: 'मेनू', fixed: 'स्थिर' }
+                en: { score: 'Score', highScore: 'High Score', difficulty: 'Difficulty', paused: 'PAUSED', settings: 'Settings', volume: 'Volume', sensitivity: 'Pedal Sensitivity', difficultyMode: 'Difficulty Mode', progressive: 'Easy', dynamic: 'Dynamic', easy: 'Easy', medium: 'Medium', hard: 'Hard', challenging: 'Challenging', impossible: 'IMPOSSIBLE', resume: 'RESUME GAME', title: 'CAR ADVENTURE', resetScore: 'Reset High Score', pairSteering: 'PAIR STEERING CONTROLLER', pairThrottle: 'PAIR THROTTLE (ENCODER)', connecting: 'CONNECTING...', paired: 'PAIRED', startEngine: 'START ENGINE', crashed: 'CRASHED!', newRecord: 'NEW HIGH SCORE!', pressRestart: 'Press SPACE or button to restart', playAgain: 'PLAY AGAIN', mainMenu: 'MAIN MENU', language: 'Language', menu: 'MENU', fixed: 'Fixed' },
+                zh: { score: '分数', highScore: '最高分', difficulty: '难度', paused: '暂停', settings: '设置', volume: '音量', sensitivity: '踏板灵敏度', difficultyMode: '难度模式', progressive: '简单', dynamic: '动态', easy: '简单', medium: '中等', hard: '困难', challenging: '挑战', impossible: '不可能', resume: '继续游戏', title: '汽车冒险', resetScore: '重置最高分', pairSteering: '配对方向盘', pairThrottle: '配对油门', connecting: '连接中...', paired: '已配对', startEngine: '开始游戏', crashed: '撞车了！', newRecord: '新纪录！', pressRestart: '按空格键或按钮重新开始', playAgain: '再玩一次', mainMenu: '主菜单', language: '语言', menu: '设置', fixed: '固定' },
+                ms: { score: 'Skor', highScore: 'Skor Tertinggi', difficulty: 'Kesukaran', paused: 'DIJEDA', settings: 'Tetapan', volume: 'Kelantangan', sensitivity: 'Sensitiviti Pedal', difficultyMode: 'Mod Kesukaran', progressive: 'Mudah', dynamic: 'Dinamik', easy: 'Mudah', medium: 'Sederhana', hard: 'Sukar', challenging: 'Mencabar', impossible: 'MUSTAHIL', resume: 'SAMBUNG PERMAINAN', title: 'CAR ADVENTURE', resetScore: 'Set Semula Skor', pairSteering: 'PAIR STERENG', pairThrottle: 'PAIR THROTTLE', connecting: 'MENYAMBUNG...', paired: 'DIPASANGKAN', startEngine: 'MULA ENJIN', crashed: 'TERLANGGAR!', newRecord: 'SKOR TERTINGGI BARU!', pressRestart: 'Tekan SPACE atau butang untuk mula semula', playAgain: 'MAIN LAGI', mainMenu: 'MENU UTAMA', language: 'Bahasa', menu: 'MENU', fixed: 'Tetap' },
+                hi: { score: 'स्कोर', highScore: 'उच्च स्कोर', difficulty: 'कठिनाई', paused: 'रुका हुआ', settings: 'सेटिंग्स', volume: 'आवाज़', sensitivity: 'पैडल संवेदनशीलता', difficultyMode: 'कठिनाई मोड', progressive: 'आसान', dynamic: 'गतिशील', easy: 'आसान', medium: 'मध्यम', hard: 'कठिन', challenging: 'चुनौतीपूर्ण', impossible: 'असंभव', resume: 'खेल जारी रखें', title: 'कार एडवेंचर', resetScore: 'स्कोर रीसेट करें', pairSteering: 'स्टीयरिंग जोड़ें', pairThrottle: 'थ्रॉटल जोड़ें', connecting: 'कनेक्ट हो रहा...', paired: 'जुड़ा हुआ', startEngine: 'इंजन चालू करें', crashed: 'टक्कर!', newRecord: 'नया रिकॉर्ड!', pressRestart: 'पुनः आरंभ करने के लिए SPACE दबाएं', playAgain: 'फिर से खेलें', mainMenu: 'मुख्य मेनू', language: 'भाषा', menu: 'मेनू', fixed: 'स्थिर' }
             };
             const t = (key) => translations[language]?.[key] || translations.en[key] || key;
             const changeLanguage = (lang) => { setLanguage(lang); localStorage.setItem('blockyRacerLang', lang); };
@@ -644,6 +523,7 @@
             const vibeCountRef = useRef(0);
             const throttlePacketCountRef = useRef(0);
             const btRef = useRef({ device: null, server: null, sensorChar: null, vibeChar: null, buttonChar: null, tilt: 0, isConnecting: false });
+            const tiltOffsetRef = useRef(0); // Calibration offset for tilt sensor
             const throttleBtRef = useRef({ device: null, server: null, throttleChar: null, throttle: 0.0, isConnecting: false });
             const audioCtxRef = useRef(null);
             const musicRef = useRef(null);
@@ -681,7 +561,7 @@
                     const server = await device.gatt.connect(); await new Promise(resolve => setTimeout(resolve, 200));
                     const service = await server.getPrimaryService(SERVICE_UUID);
                     const sensorChar = await service.getCharacteristic(SENSOR_CHAR_UUID); await sensorChar.startNotifications();
-                    sensorChar.addEventListener('characteristicvaluechanged', (event) => { try { const val = event.target.value.getFloat32(0, true); if (!isNaN(val) && isFinite(val)) { btRef.current.tilt = val; packetCountRef.current++; const rcvEl = document.getElementById('rcv'); if (rcvEl) rcvEl.innerText = packetCountRef.current; let action = "CENTER"; if (val >= 2.8) action = "RIGHT ➡️"; else if (val <= -2.8) action = "LEFT ⬅️"; window.updateDebug(null, val, action); } } catch (err) { console.error("Sensor data error:", err); } });
+                    sensorChar.addEventListener('characteristicvaluechanged', (event) => { try { const raw = event.target.value.getFloat32(0, true); if (!isNaN(raw) && isFinite(raw)) { const val = raw - tiltOffsetRef.current; btRef.current.tilt = val; packetCountRef.current++; const rcvEl = document.getElementById('rcv'); if (rcvEl) rcvEl.innerText = packetCountRef.current; let action = "CENTER"; if (val >= 2.8) action = "RIGHT ➡️"; else if (val <= -2.8) action = "LEFT ⬅️"; window.updateDebug(null, val, action); } } catch (err) { console.error("Sensor data error:", err); } });
                     const vibeChar = await service.getCharacteristic(VIBE_CHAR_UUID);
                     const buttonChar = await service.getCharacteristic(BUTTON_CHAR_UUID); await buttonChar.startNotifications();
                     buttonChar.addEventListener('characteristicvaluechanged', (event) => { const val = event.target.value.getUint8(0); if (val === 1) { console.log("🔘 Button pressed - simulating SPACE!"); const spaceEvent = new KeyboardEvent('keydown', { code: 'Space', key: ' ', keyCode: 32, bubbles: true }); window.dispatchEvent(spaceEvent); } });
@@ -719,6 +599,24 @@
                     setThBtConnected(true); setThBtConnecting(false); window.updateThrottleDebug("CONNECTED", 0.0); console.log("✅ Throttle connected!");
                 } catch (error) { console.error("❌ Throttle connection error:", error); throttleBtRef.current.isConnecting = false; setThBtConnecting(false); setThBtConnected(false); window.updateThrottleDebug("ERROR", null); alert(`Throttle Connection Failed: ${error.message}`); }
             };
+            // === CALIBRATION & RECONNECT WINDOW FUNCTIONS ===
+            window.calibrateTilt = () => {
+                // Software calibration: store offset
+                tiltOffsetRef.current = btRef.current.tilt + tiltOffsetRef.current;
+                btRef.current.tilt = 0;
+                const txEl = document.getElementById('tx');
+                if (txEl) txEl.innerText = '0.00';
+                // Hardware calibration: send calibrate command to BLE device
+                if (btRef.current.vibeChar) {
+                    const data = new Uint8Array([67]); // 'C' for calibrate
+                    btRef.current.vibeChar.writeValueWithoutResponse(data)
+                        .then(() => console.log('✅ Hardware calibration sent'))
+                        .catch(err => console.error('❌ Hardware calibration failed:', err));
+                }
+                console.log('✅ Tilt calibrated! Offset:', tiltOffsetRef.current);
+            };
+            window.reconnectSteering = () => { connectBluetooth(true); };
+            window.reconnectThrottle = () => { connectThrottleBluetooth(true); };
             const sendCalibration = async () => { if (!btRef.current.vibeChar) { alert("Not connected!"); return; } try { const data = new Uint8Array([67]); await btRef.current.vibeChar.writeValueWithoutResponse(data); console.log("✅ Calibration sent"); updateVibeStatus("Calibrating...", true); } catch (err) { console.error("❌ Calibration failed:", err); updateVibeStatus("FAIL: " + err.message, false); } };
             const sendVibration = async (fromCrash = false, duration = 400) => { if (!btRef.current.vibeChar) { console.error("❌ Not connected"); return; } if (!fromCrash && vibeTimeoutRef.current) { return; } try { const data = new Uint8Array([1]); await btRef.current.vibeChar.writeValueWithoutResponse(data); console.log(`✅ Vibe sent (${duration}ms)`); updateVibeStatus("Sent!", true); updateVibeCount(); updateLastError("None"); if (!fromCrash) { vibeTimeoutRef.current = setTimeout(() => { vibeTimeoutRef.current = null; }, 1000); } } catch (err) { console.error("❌ Vibe failed:", err); updateVibeStatus("FAIL: " + err.message, false); updateLastError(err.message); } };
             const resetHighScore = () => { if (confirm("Reset high score to 0?")) { localStorage.setItem('blockyRacerHighScore', '0'); setHighScore(0); alert("High score reset!"); } };
@@ -757,12 +655,12 @@
                         rowObj.treeInnerR.visible = false;
                     }
                 } else {
-                    // City area - show buildings with spacing
-                    if (Math.random() > 0.3) {
+                    // City area - reduced buildings (less dense)
+                    if (Math.random() > 0.6) {
                         setBuildingType(rowObj.buildL, 'random');
                         rowObj.buildL.visible = true;
                     }
-                    if (Math.random() > 0.3) {
+                    if (Math.random() > 0.6) {
                         setBuildingType(rowObj.buildR, 'random');
                         rowObj.buildR.visible = true;
                     }
@@ -783,9 +681,32 @@
                 return new THREE.Color(0x333366);
             };
             const isNight = (hour) => hour < 6 || hour >= 19;
-            const triggerScreenShake = () => {
-                const root = document.getElementById('root');
-                if (root) { root.classList.add('shake'); setTimeout(() => root.classList.remove('shake'), 400); }
+            // Blink player car on collision (disappear/reappear every 0.25s for 1 second)
+            const hidePlayerCar = (playerCarMesh) => {
+                if (!playerCarMesh) return;
+                let blinkCount = 0;
+                const blinkInterval = setInterval(() => {
+                    playerCarMesh.visible = !playerCarMesh.visible;
+                    blinkCount++;
+                    if (blinkCount >= 4) { // 4 toggles = 1 second (4 x 0.25s)
+                        clearInterval(blinkInterval);
+                        playerCarMesh.visible = true;
+                    }
+                }, 250);
+            };
+            // Blink any mesh immediately (for enemy flash on collision)
+            const blinkMesh = (mesh) => {
+                if (!mesh) return;
+                mesh.visible = false; // Start hidden immediately
+                let blinkCount = 1;
+                const blinkInterval = setInterval(() => {
+                    mesh.visible = !mesh.visible;
+                    blinkCount++;
+                    if (blinkCount >= 4) {
+                        clearInterval(blinkInterval);
+                        mesh.visible = true;
+                    }
+                }, 250);
             };
             const updateSpeedLines = (speed) => {
                 const el = document.getElementById('speed-lines');
@@ -801,7 +722,7 @@
             };
 
             useEffect(() => {
-                if (!mountRef.current) return; const scene = new THREE.Scene(); scene.background = new THREE.Color(0x87CEEB); scene.fog = new THREE.Fog(0xaaccff, 10, 280); const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000); const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' }); renderer.setSize(window.innerWidth, window.innerHeight); renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.BasicShadowMap; mountRef.current.appendChild(renderer.domElement);
+                if (!mountRef.current) return; const scene = new THREE.Scene(); scene.background = new THREE.Color(0x87CEEB); scene.fog = new THREE.Fog(0xaaccff, 10, 280); const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000); const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' }); renderer.setSize(window.innerWidth, window.innerHeight); renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; mountRef.current.appendChild(renderer.domElement);
                 new THREE.TextureLoader().load('https://images.unsplash.com/photo-1513002749550-c59d786b8e6c?q=80&w=2560&auto=format&fit=crop', (t) => {
                     scene.background = t;
                     const l = document.getElementById('loader'); if (l) { l.style.opacity = 0; setTimeout(() => l.style.display = 'none', 500); }
@@ -1849,7 +1770,7 @@
                             mb(0.3, 0.25, 0.25, new THREE.MeshLambertMaterial({ color: 0x2196F3 }), 0.6, by + 1.15, -0.2);
                         }
                     }
-                    g.scale.set(1.8, 1.8, 1.8);
+                    g.scale.set(t === 'sport' ? 2.2 : 1.8, t === 'sport' ? 2.2 : 1.8, t === 'sport' ? 2.2 : 1.8);
                     return g;
                 };
 
@@ -1981,18 +1902,8 @@
                     if (bL.userData.windowLights) gameStateRef.current.buildingWindows.push(...bL.userData.windowLights);
                     if (bR.userData.windowLights) gameStateRef.current.buildingWindows.push(...bR.userData.windowLights);
 
-                    // Street lamps (every 4th row)
+                    // Street lamps removed per user request
                     let lampL = null, lampR = null;
-                    if (i % 4 === 0) {
-                        lampL = createStreetLamp();
-                        lampL.position.set(-17, 0, 0);
-                        rowG.add(lampL);
-                        lampR = createStreetLamp();
-                        lampR.position.set(17, 0, 0);
-                        lampR.rotation.y = Math.PI;
-                        rowG.add(lampR);
-                        gameStateRef.current.streetLamps.push(lampL, lampR);
-                    }
 
                     // Guardrails (every 3rd row, alternating sides)
                     let guardL = null, guardR = null;
@@ -2066,11 +1977,9 @@
                 const animate = () => {
                     requestAnimationFrame(animate);
                     // Show/hide HUD elements based on game state
-                    const speedoDisplay = document.getElementById('speedometer');
                     const gearDisplay = document.getElementById('gear-indicator');
                     const bpmDisplay = document.getElementById('bpm-tracker');
                     const isPlaying = gameStateRef.current.gameStarted && !gameStateRef.current.isGameOver && !gameStateRef.current.isPaused;
-                    if (speedoDisplay) speedoDisplay.style.display = isPlaying ? 'flex' : 'none';
                     if (gearDisplay) gearDisplay.style.display = isPlaying ? 'block' : 'none';
                     if (bpmDisplay) bpmDisplay.style.display = isPlaying ? 'block' : 'none';
 
@@ -2103,16 +2012,7 @@
                     headlightL.intensity = headlightIntensity;
                     headlightR.intensity = headlightIntensity;
 
-                    // Update street lamp lights based on time
-                    const lampIntensity = isNight(hour) ? 2.0 : 0;
-                    gameStateRef.current.streetLamps.forEach(lamp => {
-                        if (lamp && lamp.userData.light) {
-                            lamp.userData.light.intensity = lampIntensity;
-                            if (lamp.userData.bulb) {
-                                lamp.userData.bulb.material.color.setHex(isNight(hour) ? 0xffff99 : 0x888866);
-                            }
-                        }
-                    });
+                    // Street lamp updates removed (lamps disabled)
 
                     // Update building window lights based on time
                     const windowOpacity = isNight(hour) ? 0.85 : 0;
@@ -2127,69 +2027,10 @@
                     // Time display
                     updateTimeDisplay(hour);
 
-                    // Update speedometer HUD
-                    const displaySpeed = Math.floor(speed * 180); // Convert to "km/h"
-                    const speedValEl = document.getElementById('speed-value');
-                    const speedFillEl = document.getElementById('speed-fill');
-                    const gearEl = document.getElementById('gear-indicator');
-                    if (speedValEl) speedValEl.innerText = displaySpeed;
-                    if (speedFillEl) speedFillEl.style.width = Math.min(100, (speed / 1.4) * 100) + '%';
-                    if (gearEl) {
-                        if (speed < 0.1) gearEl.innerText = 'N';
-                        else if (speed < 0.4) gearEl.innerText = '1';
-                        else if (speed < 0.7) gearEl.innerText = '2';
-                        else if (speed < 1.0) gearEl.innerText = '3';
-                        else if (speed < 1.2) gearEl.innerText = '4';
-                        else gearEl.innerText = '5';
-                    }
+                    // Gear indicator removed
 
-                    // Rain Logic
-                    if (Math.random() < 0.0005) gameStateRef.current.isRaining = !gameStateRef.current.isRaining;
-                    const rainEl = document.getElementById('rain-overlay');
-                    if (rainEl) {
-                        rainEl.style.opacity = gameStateRef.current.isRaining ? 1 : 0;
-                        if (gameStateRef.current.isRaining && Math.random() > 0.6) {
-                            const drop = document.createElement('div');
-                            drop.className = 'rain-drop';
-                            drop.style.left = Math.random() * 100 + 'vw';
-                            drop.style.animationDuration = (0.3 + Math.random() * 0.3) + 's';
-                            rainEl.appendChild(drop);
-                            setTimeout(() => drop.remove(), 600);
-                        }
-                    }
-                    // Puddle visibility and movement
-                    puddles.forEach(puddle => {
-                        puddle.visible = gameStateRef.current.isRaining;
-                        if (puddle.visible) {
-                            puddle.position.z += speed;
-                            // Check if player car drives through puddle
-                            const dx = Math.abs(puddle.position.x - playerCar.position.x);
-                            const dz = Math.abs(puddle.position.z - playerCar.position.z);
-                            if (dx < 3 && dz < 2 && speed > 0.3) {
-                                spawnSplash(playerCar.position.x, playerCar.position.z);
-                            }
-                            // Reset puddle position
-                            if (puddle.position.z > 80) {
-                                puddle.position.z = -250 + Math.random() * 50;
-                                puddle.position.x = (Math.random() - 0.5) * 25;
-                            }
-                        }
-                    });
-                    // Animate splash particles
-                    splashParticles.forEach(p => {
-                        if (p.active) {
-                            p.life--;
-                            p.mesh.position.x += p.vx;
-                            p.mesh.position.y += p.vy;
-                            p.mesh.position.z += p.vz + speed;
-                            p.vy -= 0.02; // gravity
-                            p.mesh.material.opacity *= 0.9;
-                            if (p.life <= 0 || p.mesh.position.y < 0) {
-                                p.active = false;
-                                p.mesh.visible = false;
-                            }
-                        }
-                    });
+                    // Rain logic removed per user request
+                    // Puddle and splash logic also removed
 
 
 
@@ -2266,11 +2107,42 @@
                         spawnExhaust(playerCar.position.x, 0.5, playerCar.position.z + 4);
                     }
                     const t = gameStateRef.current.movingTime; const diffMode = gameStateRef.current.difficulty;
+                    const currentScore = gameStateRef.current.score;
                     let laneSwitchProb = 0, spawnRate = 80, laneChangeDistance = 80;
-                    if (diffMode === 'Progressive') { if (t > 30 && t <= 60) { laneSwitchProb = 0.002; spawnRate = 60; laneChangeDistance = 100; } else if (t > 60) { laneSwitchProb = 0.008; spawnRate = 55; laneChangeDistance = 120; } } else { if (diffMode === 'Medium') { laneSwitchProb = 0.002; spawnRate = 60; laneChangeDistance = 100; } else if (diffMode === 'Hard') { laneSwitchProb = 0.008; spawnRate = 55; laneChangeDistance = 120; } }
+                    if (diffMode === 'Progressive') {
+                        // Easy (0-2000)
+                        if (currentScore <= 2000) {
+                            // Default easy settings
+                        }
+                        // Medium (2000-4000)
+                        else if (currentScore > 2000 && currentScore <= 4000) {
+                            laneSwitchProb = 0.002; spawnRate = 60; laneChangeDistance = 100;
+                        }
+                        // Hard (4000-6000)
+                        else if (currentScore > 4000 && currentScore <= 6000) {
+                            laneSwitchProb = 0.008; spawnRate = 55; laneChangeDistance = 120;
+                        }
+                        // Challenging (6000-8000)
+                        else if (currentScore > 6000 && currentScore <= 8000) {
+                            laneSwitchProb = 0.015; spawnRate = 45; laneChangeDistance = 140;
+                        }
+                        // Impossible (8000+)
+                        else if (currentScore > 8000) {
+                            laneSwitchProb = 0.03; spawnRate = 30; laneChangeDistance = 60; // Chaos!
+                        }
+                    } else { if (diffMode === 'Medium') { laneSwitchProb = 0.002; spawnRate = 60; laneChangeDistance = 100; } else if (diffMode === 'Hard') { laneSwitchProb = 0.008; spawnRate = 55; laneChangeDistance = 120; } }
                     let clicks = throttleBtRef.current.throttle; throttleBtRef.current.throttle = 0;
                     const keyboardActive = (keys['w'] || keys['ArrowUp']);
-                    if (keyboardActive) { speed = Math.min(speed + 0.015, 1.4); } else if (clicks > 0) { let accelAmount = clicks * sensitivityRef.current * 0.5; speed = Math.min(speed + accelAmount, 1.4); } else { speed *= 0.99; if (speed < 0.01) speed = 0; }
+                    if (keyboardActive) {
+                        speed = Math.min(speed + 0.0065, 1.4);
+                    } else if (clicks > 0) {
+                        // Throttle pedal input
+                        let accelAmount = clicks * sensitivityRef.current * 0.23;
+                        speed = Math.min(speed + accelAmount, 1.4);
+                    } else {
+                        speed *= 0.99;
+                        if (speed < 0.01) speed = 0;
+                    }
                     steerTarget = 0; const tiltValue = btRef.current.tilt;
                     if (keys['a'] || keys['ArrowLeft']) { steerTarget = -0.3; } else if (keys['d'] || keys['ArrowRight']) { steerTarget = 0.3; } else if (tiltValue <= -2.8) { steerTarget = -0.3; } else if (tiltValue >= 2.8) { steerTarget = 0.3; }
                     const STEER_SMOOTH = 0.15; steerCurrent += (steerTarget - steerCurrent) * STEER_SMOOTH; if (Math.abs(steerCurrent) < 0.02) steerCurrent = 0;
@@ -2279,7 +2151,7 @@
                     const tr = -steerCurrent * 0.3; const tt = -steerCurrent * 0.15; currentRot += (tr - currentRot) * 0.1; currentTilt += (tt - currentTilt) * 0.1; playerCar.rotation.y = currentRot; playerCar.rotation.z = currentTilt;
                     camera.position.x = playerCar.position.x * 0.6; camera.lookAt(playerCar.position.x * 0.3, 2, -50);
                     if (speed > 0) {
-                        gameStateRef.current.score += 1;
+                        gameStateRef.current.score += speed;
                         setScore(Math.floor(gameStateRef.current.score));
                         setScore(Math.floor(gameStateRef.current.score));
 
@@ -2366,16 +2238,20 @@
 
                         const distanceZ = Math.abs(opp.mesh.position.z - playerCar.position.z);
                         const distanceX = Math.abs(opp.mesh.position.x - playerCar.position.x); // Hitbox uses visual X which is correct
-                        if (distanceZ < 5.5 && distanceX < 3.5) {
+                        if (distanceZ < 8 && distanceX < 4.5 && !opp.hitCooldown) {
                             console.log("💥 HIT!");
                             playCrashSound();
-                            triggerScreenShake(); // Visual shake
+                            hidePlayerCar(playerCar); // Blink the player car
+                            blinkMesh(opp.mesh); // Blink the enemy car too
                             spawnSparks(playerCar.position.x, 1, 0); // Visual sparks
                             gameStateRef.current.lives--;
                             setLives(gameStateRef.current.lives);
+                            // Mark this specific enemy as hit - player invincible to it for 1 second
+                            opp.hitCooldown = true;
+                            setTimeout(() => { opp.hitCooldown = false; }, 1000);
                             if (gameStateRef.current.lives <= 0) {
                                 console.log("💀 GAME OVER!");
-                                stopMusic();
+                                stopMusic(); // Reset music on death
                                 sendVibration(true, 800);
                                 setGameOver(true);
                                 gameStateRef.current.isGameOver = true;
@@ -2390,8 +2266,6 @@
                             } else {
                                 sendVibration(true, 400);
                             }
-                            scene.remove(opp.mesh);
-                            ops.splice(i, 1);
                         } if (opp.mesh.position.z > 80) { scene.remove(opp.mesh); ops.splice(i, 1); }
                     }
                     renderer.render(scene, camera);
@@ -2406,18 +2280,18 @@
                 if (!audioCtxRef.current) return;
                 const ctx = audioCtxRef.current;
 
-                // 1. The "Bonk" (Square wave pitch drop)
+                // 1. Mellow, warm "thud" sound (triangle wave for soft, warm tone)
                 const osc = ctx.createOscillator();
                 const gain = ctx.createGain();
 
-                osc.type = 'square'; // VS 'sawtooth' for harsher, 'sine' for softer. Square is very "NES".
+                osc.type = 'triangle'; // Triangle for soft, warm sound
 
-                // Start at a mid tone and drop fast
-                osc.frequency.setValueAtTime(150, ctx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(40, ctx.currentTime + 0.3);
+                // Higher frequencies for mellower, less harsh sound
+                osc.frequency.setValueAtTime(200, ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.3);
 
-                // Volume envelope
-                gain.gain.setValueAtTime(0.3 * volumeRef.current, ctx.currentTime);
+                // Moderate volume with smooth decay
+                gain.gain.setValueAtTime(0.35 * volumeRef.current, ctx.currentTime);
                 gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
 
                 osc.connect(gain);
@@ -2425,6 +2299,19 @@
 
                 osc.start();
                 osc.stop(ctx.currentTime + 0.3);
+
+                // 2. Soft secondary tone for warmth
+                const warmOsc = ctx.createOscillator();
+                const warmGain = ctx.createGain();
+                warmOsc.type = 'sine';
+                warmOsc.frequency.setValueAtTime(120, ctx.currentTime);
+                warmOsc.frequency.exponentialRampToValueAtTime(50, ctx.currentTime + 0.4);
+                warmGain.gain.setValueAtTime(0.25 * volumeRef.current, ctx.currentTime);
+                warmGain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+                warmOsc.connect(warmGain);
+                warmGain.connect(ctx.destination);
+                warmOsc.start();
+                warmOsc.stop(ctx.currentTime + 0.4);
 
                 // 2. A tiny bit of noise for texture (crunch), but much quieter
                 const bufferSize = ctx.sampleRate * 0.2; // Shorter
@@ -2448,6 +2335,8 @@
                 noise.start();
             };
             const startMusic = () => {
+                const musicTracks = ['sounds/music.mp3', 'sounds/elderlysong1.mp3', 'sounds/elderlysong2.mp3'];
+                const randomTrack = musicTracks[Math.floor(Math.random() * musicTracks.length)];
                 if (!musicRef.current) {
                     musicRef.current = new Audio();
                     // When first track ends, switch to boss music
@@ -2458,8 +2347,8 @@
                         musicRef.current.play().catch(e => console.log("Boss music failed:", e));
                     });
                 }
-                // Allow "music.mp3" to play again from start on restart
-                musicRef.current.src = 'sounds/music.mp3';
+                // Randomly select from available tracks
+                musicRef.current.src = randomTrack;
                 musicRef.current.loop = false; // Don't loop initial track
                 musicRef.current.volume = volumeRef.current;
                 musicRef.current.currentTime = 0;
@@ -2468,14 +2357,42 @@
             const stopMusic = () => {
                 if (musicRef.current) {
                     musicRef.current.pause();
+                    musicRef.current.currentTime = 0;
                 }
             };
             const onStartGame = () => { initAudio(); startMusic(); setGameStarted(true); gameStateRef.current.gameStarted = true; gameStateRef.current.isPaused = false; };
-            const onPlayAgain = () => { triggerRestart(); initAudio(); startMusic(); };
+            const onPlayAgain = () => {
+                triggerRestart();
+                initAudio();
+                // Ensure music plays properly on restart
+                if (musicRef.current) {
+                    musicRef.current.pause();
+                    musicRef.current.currentTime = 0;
+                }
+                startMusic();
+            };
             return (
                 <div style={{ width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden' }}>
                     <div ref={mountRef} style={{ width: '100%', height: '100%' }} />
-                    {gameStarted && !gameOver && (<> <div id="hud"> <div style={{ fontSize: 32, fontWeight: 'bold' }}>{t('score')}: {score}</div> <div style={{ fontSize: 32, fontWeight: 'bold', color: '#FFFF00', marginTop: 5 }}>{t('highScore')}: {highScore}</div> <div style={{ fontSize: 18, color: '#000000', marginTop: 10, fontWeight: 'bold', textShadow: '1px 1px 0 #fff' }}>{t('difficulty')}: {t(uiDifficulty.toLowerCase())}</div> </div> <div id="lives"> <span style={{ color: lives >= 1 ? '#ff0000' : '#666' }}>❤</span> <span style={{ color: lives >= 2 ? '#ff0000' : '#666' }}>❤</span> <span style={{ color: lives >= 3 ? '#ff0000' : '#666' }}>❤</span> </div> </>)}
+                    {gameStarted && !gameOver && (<>
+                        <div id="hud">
+                            <div style={{ fontSize: 24, fontWeight: 'bold' }}>{t('score')}: {score}</div>
+                            <div style={{ fontSize: 20, fontWeight: 'bold', color: '#FFFF00', marginTop: 5 }}>{t('highScore')}: {highScore}</div>
+                            <div style={{ fontSize: 16, color: '#00FF00', marginTop: 5, fontWeight: 'bold' }}>{t('difficulty')}: {uiDifficulty === 'Progressive' ? (gameStateRef.current.score > 8000 ? t('impossible') : gameStateRef.current.score > 6000 ? t('challenging') : gameStateRef.current.score > 4000 ? t('hard') : gameStateRef.current.score > 2000 ? t('medium') : t('easy')) : t(uiDifficulty.toLowerCase())}</div>
+                            <div style={{ marginTop: 8 }}>
+                                <button onClick={() => {
+                                    if (window.calibrateTilt) window.calibrateTilt();
+                                    setCalibrated(true);
+                                    setTimeout(() => setCalibrated(false), 1500);
+                                }} style={{ background: calibrated ? '#4CAF50' : '#9C27B0', color: 'white', border: 'none', borderRadius: 6, padding: '6px 14px', fontSize: 14, fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.3s ease', boxShadow: calibrated ? '0 0 20px rgba(76,175,80,0.8)' : '0 2px 8px rgba(156,39,176,0.4)', transform: calibrated ? 'scale(1.15)' : 'scale(1)' }}>{calibrated ? 'CALIBRATED!' : 'Calibrate'}</button>
+                            </div>
+                        </div>
+                        <div id="lives">
+                            <span style={{ color: lives >= 1 ? '#ff0000' : '#666' }}>&#10084;</span>
+                            <span style={{ color: lives >= 2 ? '#ff0000' : '#666' }}>&#10084;</span>
+                            <span style={{ color: lives >= 3 ? '#ff0000' : '#666' }}>&#10084;</span>
+                        </div>
+                    </>)}
                     {gameStarted && !gameOver && <div id="menuBtn" onClick={toggleMenu}>{t('menu')}</div>}
                     <div id="sideMenu" className={menuOpen ? 'open' : ''}>
                         <h2 style={{ textAlign: 'center', borderBottom: '1px solid #666', paddingBottom: '5px', marginTop: 0, marginBottom: '5px', fontSize: '18px' }}>{t('paused')}</h2>
@@ -2503,21 +2420,36 @@
 
                         <div style={{ marginBottom: '8px' }}>
                             <h3 style={{ fontSize: '14px', color: '#aaa', marginTop: 0, marginBottom: '5px' }}>{t('difficultyMode')}</h3>
-                            <div className={`menu-opt ${uiDifficulty === 'Progressive' ? 'active' : ''}`} onClick={() => changeDifficulty('Progressive')}>{t('progressive')}</div>
+                            <div className={`menu-opt ${uiDifficulty === 'Progressive' ? 'active' : ''}`} onClick={() => changeDifficulty('Progressive')}>{t('progressive')} ({t('dynamic')})</div>
                             <div className={`menu-opt ${uiDifficulty === 'Easy' ? 'active' : ''}`} onClick={() => changeDifficulty('Easy')}>{t('fixed')}: {t('easy')}</div>
                             <div className={`menu-opt ${uiDifficulty === 'Medium' ? 'active' : ''}`} onClick={() => changeDifficulty('Medium')}>{t('fixed')}: {t('medium')}</div>
                             <div className={`menu-opt ${uiDifficulty === 'Hard' ? 'active' : ''}`} onClick={() => changeDifficulty('Hard')}>{t('fixed')}: {t('hard')}</div>
                         </div>
-                        <div className="menu-opt" style={{ background: '#2196F3', marginTop: 'auto' }} onClick={toggleMenu}>{t('resume')}</div>
-                        <div className="menu-opt" style={{ background: '#FF5722', marginTop: '5px' }} onClick={() => window.location.href = 'game_hub.html'}>{t('backToHub')}</div>
-                    </div>
-                    {!gameStarted && (<div id="overlayScreen"> <h1 style={{ fontSize: '80px', margin: 0, color: '#4CAF50', textShadow: '4px 4px 0 #000' }}>{t('title')}</h1> <p style={{ marginTop: '20px', fontSize: '18px' }}>{t('highScore')}: {highScore}</p> <button className="reset-score-btn" onClick={resetHighScore}>{t('resetScore')}</button>
-                        <button className={`bt-btn ${btConnected ? 'connected' : btConnecting ? 'connecting' : ''}`} onClick={!btConnected && !btConnecting ? connectBluetooth : null} disabled={btConnecting}> {btConnected ? `✅ ${t('pairSteering')} ${t('paired')}` : btConnecting ? `🔄 ${t('connecting')}` : `📡 ${t('pairSteering')}`} </button>
-                        <button className={`bt-btn ${thBtConnected ? 'connected' : thBtConnecting ? 'connecting' : ''}`} onClick={!thBtConnected && !thBtConnecting ? connectThrottleBluetooth : null} disabled={thBtConnecting}> {thBtConnected ? `✅ ${t('pairThrottle')} ${t('paired')}` : thBtConnecting ? `🔄 ${t('connecting')}` : `🌀 ${t('pairThrottle')}`} </button>
-                        <button className="big-btn" onClick={onStartGame}>{t('startEngine')}</button> </div>)}
-                    {gameOver && (<div id="overlayScreen"> <h1 style={{ color: '#ff4444', fontSize: '80px', margin: 0 }}>{t('crashed')}</h1> <p style={{ fontSize: '32px' }}>{t('score')}: {score}</p> {newRecord && <div style={{ background: '#FFD700', color: 'black', padding: '10px 20px', borderRadius: '5px', fontWeight: 'bold', fontSize: '20px', marginBottom: '20px' }}>🏆 {t('newRecord')} 🏆</div>} <p style={{ fontSize: '18px', color: '#aaa' }}>{t('pressRestart')}</p> <button className="big-btn" onClick={onPlayAgain}>{t('playAgain')}</button> <div style={{ marginTop: '15px' }}> <button className="restart-btn" onClick={() => { setGameStarted(false); setGameOver(false); setScore(0); setLives(3); }}>{t('mainMenu')}</button> <button className="restart-btn" style={{ marginLeft: '10px', background: '#2196F3' }} onClick={() => window.location.href = 'game_hub.html'}>{t('backToHub')}</button> </div> </div>)}
 
-                </div>
+                        <div style={{ marginBottom: '8px' }}>
+                            <h3 style={{ fontSize: '14px', color: '#aaa', marginTop: 0, marginBottom: '5px' }}>BLE</h3>
+                            <div className="menu-opt" style={{ background: '#00BCD4', marginTop: '5px', transition: 'all 0.3s ease', cursor: 'pointer' }} onClick={() => { if (window.reconnectSteering) window.reconnectSteering(); }} onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>🔄 Reconnect Steering</div>
+                            <div className="menu-opt" style={{ background: '#00BCD4', marginTop: '5px', transition: 'all 0.3s ease', cursor: 'pointer' }} onClick={() => { if (window.reconnectThrottle) window.reconnectThrottle(); }} onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>🔄 Reconnect Throttle</div>
+                        </div>
+
+                        <div style={{ marginBottom: '8px' }}>
+                            <h3 style={{ fontSize: '14px', color: '#aaa', marginTop: 0, marginBottom: '5px' }}>🎵 Music</h3>
+                            <div className="menu-opt" style={{ background: '#E91E63' }} onClick={() => { if (musicRef.current) { musicRef.current.src = 'sounds/music.mp3'; musicRef.current.play(); } }}>🎶 Original Track</div>
+                            <div className="menu-opt" style={{ background: '#E91E63', marginTop: '5px' }} onClick={() => { if (musicRef.current) { musicRef.current.src = 'sounds/elderlysong1.mp3'; musicRef.current.play(); } }}>🎶 Elderly Song 1</div>
+                            <div className="menu-opt" style={{ background: '#E91E63', marginTop: '5px' }} onClick={() => { if (musicRef.current) { musicRef.current.src = 'sounds/elderlysong2.mp3'; musicRef.current.play(); } }}>🎶 Elderly Song 2</div>
+                            <div className="menu-opt" style={{ background: '#E91E63', marginTop: '5px' }} onClick={() => { if (musicRef.current) { musicRef.current.src = 'sounds/boss.mp3'; musicRef.current.play(); } }}>🎶 Boss Music</div>
+                        </div>
+                        <div className="menu-opt" style={{ background: '#2196F3', marginTop: 'auto' }} onClick={toggleMenu}>{t('resume')}</div>
+                    </div>
+                    {
+                        !gameStarted && (<div id="overlayScreen"> <h1 style={{ fontSize: '80px', margin: 0, color: '#4CAF50', textShadow: '4px 4px 0 #000' }}>{t('title')}</h1> <p style={{ marginTop: '20px', fontSize: '18px' }}>{t('highScore')}: {highScore}</p> <button className="reset-score-btn" onClick={resetHighScore}>{t('resetScore')}</button>
+                            <button className={`bt-btn ${btConnected ? 'connected' : btConnecting ? 'connecting' : ''}`} onClick={!btConnected && !btConnecting ? connectBluetooth : null} disabled={btConnecting}> {btConnected ? `✅ ${t('pairSteering')} ${t('paired')}` : btConnecting ? `🔄 ${t('connecting')}` : `📡 ${t('pairSteering')}`} </button>
+                            <button className={`bt-btn ${thBtConnected ? 'connected' : thBtConnecting ? 'connecting' : ''}`} onClick={!thBtConnected && !thBtConnecting ? connectThrottleBluetooth : null} disabled={thBtConnecting}> {thBtConnected ? `✅ ${t('pairThrottle')} ${t('paired')}` : thBtConnecting ? `🔄 ${t('connecting')}` : `🌀 ${t('pairThrottle')}`} </button>
+                            <button className="big-btn" onClick={onStartGame}>{t('startEngine')}</button> </div>)
+                    }
+                    {gameOver && (<div id="overlayScreen"> <h1 style={{ color: '#ff4444', fontSize: '80px', margin: 0 }}>{t('crashed')}</h1> <p style={{ fontSize: '32px' }}>{t('score')}: {score}</p> {newRecord && <div style={{ background: '#FFD700', color: 'black', padding: '10px 20px', borderRadius: '5px', fontWeight: 'bold', fontSize: '20px', marginBottom: '20px' }}>🏆 {t('newRecord')} 🏆</div>} <p style={{ fontSize: '18px', color: '#aaa' }}>{t('pressRestart')}</p> <button className="big-btn" onClick={onPlayAgain}>{t('playAgain')}</button> <div style={{ marginTop: '15px' }}> <button className="restart-btn" onClick={() => { setGameStarted(false); setGameOver(false); setScore(0); setLives(3); }}>{t('mainMenu')}</button> </div> </div>)}
+
+                </div >
             );
         };
         const root = ReactDOM.createRoot(document.getElementById('root'));
@@ -2526,5 +2458,3 @@
 </body>
 
 </html>
-
-
