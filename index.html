@@ -5,6 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Car Adventure</title>
+
+    <!-- ======================== CSS STYLES ======================== -->
     <style>
         body {
             margin: 0;
@@ -13,6 +15,7 @@
             font-family: Arial, sans-serif;
         }
 
+        /* ---------- Debug Panel (BLE status overlay) ---------- */
         #debug-panel {
             position: fixed;
             top: 10px;
@@ -49,6 +52,7 @@
             color: #f00;
         }
 
+        /* ---------- Loading Screen ---------- */
         #loader {
             position: absolute;
             top: 0;
@@ -64,6 +68,7 @@
             transition: opacity 0.5s;
         }
 
+        /* ---------- Heads-Up Display (score, difficulty) ---------- */
         #hud {
             position: absolute;
             top: 20px;
@@ -79,6 +84,7 @@
             pointer-events: auto;
         }
 
+        /* ---------- Lives Display (hearts) ---------- */
         #lives {
             position: absolute;
             bottom: 20px;
@@ -91,6 +97,7 @@
             font-weight: bold;
         }
 
+        /* ---------- Menu Button (bottom-right) ---------- */
         #menuBtn {
             position: absolute;
             bottom: 20px;
@@ -107,6 +114,7 @@
             pointer-events: auto;
         }
 
+        /* ---------- Side Menu (settings / pause panel) ---------- */
         #sideMenu {
             position: absolute;
             top: 0;
@@ -151,13 +159,16 @@
             font-weight: bold;
         }
 
+        /* ---------- Overlay Screen (start / game-over) ---------- */
         #overlayScreen {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.85);
+            background: rgba(0, 0, 0, 0.45);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -183,6 +194,7 @@
             text-align: center;
         }
 
+        /* ---------- Bluetooth Pairing Buttons ---------- */
         .bt-btn {
             padding: 15px 30px;
             font-size: 18px;
@@ -229,6 +241,7 @@
             text-align: center;
         }
 
+        /* ---------- Debug Test Buttons ---------- */
         .test-btn {
             background: #f00;
             color: white;
@@ -296,49 +309,15 @@
             transition: opacity 0.3s;
         }
 
-        #rain-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            pointer-events: none;
-            z-index: 4;
-            opacity: 0;
-            background: linear-gradient(180deg,
-                    transparent 0%,
-                    rgba(150, 180, 200, 0.1) 50%,
-                    rgba(100, 130, 160, 0.2) 100%);
-        }
-
-        .rain-drop {
-            position: absolute;
-            width: 2px;
-            height: 20px;
-            background: linear-gradient(to bottom, transparent, rgba(200, 220, 255, 0.6));
-            animation: rain-fall 0.5s linear infinite;
-        }
-
-        @keyframes rain-fall {
-            from {
-                transform: translateY(-100vh);
-            }
-
-            to {
-                transform: translateY(100vh);
-            }
-        }
-
-
-
-        #time-display {
-            display: none;
-        }
 
 
 
 
 
+
+
+
+        /* ---------- BPM / Heart-Rate Tracker Widget ---------- */
         #bpm-tracker {
             position: fixed;
             top: 20px;
@@ -427,27 +406,38 @@
             }
         }
     </style>
+
+    <!-- ======================== EXTERNAL LIBRARIES ======================== -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script> <!-- 3D engine -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script> <!-- JSX transpiler -->
 </head>
 
 <body>
 
+    <!-- Loading overlay (hidden once background texture loads) -->
     <div id="loader">Loading Assets...</div>
 
+    <!-- Speed-lines visual effect (opacity controlled by JS) -->
     <div id="speed-lines"></div>
-    <div id="rain-overlay"></div>
-    <div id="time-display">☀️ 12:00</div>
+
+    <!-- Heart-rate BPM tracker widget (shown during gameplay) -->
     <div id="bpm-tracker" style="display: none;">
         <span class="bpm-icon">❤️</span>
         <span class="bpm-value" id="bpm-value">--</span>
         <span class="bpm-label">BPM</span>
     </div>
+
+    <!-- React root container -->
     <div id="root"></div>
+
+    <!-- ======================== GAME LOGIC (React + Three.js) ======================== -->
     <script type="text/babel">
         const { useEffect, useRef, useState } = React;
+
+        // ── Debug HUD Updaters ──────────────────────────────────────────
+        // Called from BLE event handlers to update the on-screen debug panel.
         window.updateDebug = (status, x, action) => {
             const stEl = document.getElementById('st');
             if (status && stEl) {
@@ -474,6 +464,8 @@
                 if (thEl) thEl.innerText = throttleVal.toFixed(2);
             }
         };
+
+        // Update BPM display widget and apply warning/danger CSS classes.
         window.updateBpmDisplay = (bpm) => {
             const bpmValEl = document.getElementById('bpm-value');
             const bpmTracker = document.getElementById('bpm-tracker');
@@ -487,8 +479,14 @@
                 }
             }
         };
+
+        // ═══════════════════════════════════════════════════════════════
+        //  BlockyCarGame — Main React Component
+        // ═══════════════════════════════════════════════════════════════
         const BlockyCarGame = () => {
             const mountRef = useRef(null);
+
+            // ── React State ─────────────────────────────────────────
             const [gameStarted, setGameStarted] = useState(false);
             const [gameOver, setGameOver] = useState(false);
             const [score, setScore] = useState(0);
@@ -497,45 +495,110 @@
             const [newRecord, setNewRecord] = useState(false);
             const [menuOpen, setMenuOpen] = useState(false);
             const [uiDifficulty, setUiDifficulty] = useState('Progressive');
+            // ── Settings (persisted to localStorage) ────────────────
             const [volume, setVolume] = useState(() => { const saved = localStorage.getItem('blockyRacerVolume'); return saved ? parseFloat(saved) : 0.5; });
             const [sensitivity, setSensitivity] = useState(() => { const saved = localStorage.getItem('blockyRacerSensitivity'); return saved ? parseFloat(saved) : 0.5; });
             const [language, setLanguage] = useState(localStorage.getItem('blockyRacerLang') || 'en');
             const volumeRef = useRef(0.5);
             const sensitivityRef = useRef(0.5);
-            const [btConnected, setBtConnected] = useState(false);
+
+            // ── BLE Connection State ────────────────────────────────
+            const [btConnected, setBtConnected] = useState(false);       // Steering controller
             const [btConnecting, setBtConnecting] = useState(false);
-            const [thBtConnected, setThBtConnected] = useState(false);
+            const [thBtConnected, setThBtConnected] = useState(false);   // Throttle controller
             const [thBtConnecting, setThBtConnecting] = useState(false);
 
-            const [calibrated, setCalibrated] = useState(false);
+            const [calibrated, setCalibrated] = useState(false);         // Tilt calibration feedback
 
-            // Translations
+            // ── Translations (English / Chinese) ───────────────────
             const translations = {
-                en: { score: 'Score', highScore: 'High Score', difficulty: 'Difficulty', paused: 'PAUSED', settings: 'Settings', volume: 'Volume', sensitivity: 'Pedal Sensitivity', difficultyMode: 'Difficulty Mode', progressive: 'Progressive', easy: 'Easy', medium: 'Medium', hard: 'Hard', challenging: 'Challenging', resume: 'RESUME GAME', title: 'CAR ADVENTURE', resetScore: 'Reset High Score', pairSteering: 'HAND CONTROLLER', pairThrottle: 'FOOT PEDAL', connecting: 'CONNECTING...', paired: 'PAIRED', startEngine: 'START ENGINE', crashed: 'CRASHED!', newRecord: 'NEW HIGH SCORE!', pressRestart: 'Press SPACE or button to restart', playAgain: 'PLAY AGAIN', mainMenu: 'MAIN MENU', language: 'Language', menu: 'MENU', fixed: 'Fixed' },
-                zh: { score: '分数', highScore: '最高分', difficulty: '难度', paused: '暂停', settings: '设置', volume: '音量', sensitivity: '踏板灵敏度', difficultyMode: '难度模式', progressive: '变式', easy: '简单', medium: '中等', hard: '难', challenging: '挑战', resume: '继续游戏', title: '汽车冒险', resetScore: '重置最高分', pairSteering: '手控器', pairThrottle: '脚踏板', connecting: '连接中...', paired: '已配对', startEngine: '开始游戏', crashed: '撞车了！', newRecord: '新纪录！', pressRestart: '按空格键或按钮重新开始', playAgain: '再玩一次', mainMenu: '主页', language: '语言', menu: '设置', fixed: '定式' }
+                en: {
+                    score: 'Score', highScore: 'High Score', difficulty: 'Difficulty',
+                    paused: 'PAUSED', settings: 'Settings', volume: 'Volume',
+                    sensitivity: 'Pedal Sensitivity', difficultyMode: 'Difficulty Mode',
+                    progressive: 'Progressive', easy: 'Easy', medium: 'Medium',
+                    hard: 'Hard', challenging: 'Challenging', resume: 'RESUME GAME',
+                    title: 'CAR ADVENTURE', resetScore: 'Reset High Score',
+                    pairSteering: 'HAND CONTROLLER', pairThrottle: 'FOOT PEDAL',
+                    connecting: 'CONNECTING...', paired: 'PAIRED',
+                    startEngine: 'START ENGINE', crashed: 'CRASHED!',
+                    newRecord: 'NEW HIGH SCORE!',
+                    pressRestart: 'Press SPACE or button to restart',
+                    playAgain: 'PLAY AGAIN', mainMenu: 'MAIN MENU',
+                    language: 'Language', menu: 'MENU', fixed: 'Fixed'
+                },
+                zh: {
+                    score: '分数', highScore: '最高分', difficulty: '难度',
+                    paused: '暂停', settings: '设置', volume: '音量',
+                    sensitivity: '踏板灵敏度', difficultyMode: '难度模式',
+                    progressive: '变式', easy: '简单', medium: '中等',
+                    hard: '难', challenging: '挑战', resume: '继续游戏',
+                    title: '汽车冒险', resetScore: '重置最高分',
+                    pairSteering: '手控器', pairThrottle: '脚踏板',
+                    connecting: '连接中...', paired: '已配对',
+                    startEngine: '开始游戏', crashed: '撞车了！',
+                    newRecord: '新纪录！',
+                    pressRestart: '按空格键或按钮重新开始',
+                    playAgain: '再玩一次', mainMenu: '主页',
+                    language: '语言', menu: '设置', fixed: '定式'
+                }
             };
             const t = (key) => translations[language]?.[key] || translations.en[key] || key;
             const changeLanguage = (lang) => { setLanguage(lang); localStorage.setItem('blockyRacerLang', lang); };
 
             // ... (omitted lines) ...
 
+            // ── Refs for BLE packet counters and vibration cooldown ──
             const vibeTimeoutRef = useRef(null);
             const packetCountRef = useRef(0);
             const vibeCountRef = useRef(0);
             const throttlePacketCountRef = useRef(0);
-            const btRef = useRef({ device: null, server: null, sensorChar: null, vibeChar: null, buttonChar: null, tilt: 0, isConnecting: false });
-            const tiltOffsetRef = useRef(0); // Calibration offset for tilt sensor
-            const throttleBtRef = useRef({ device: null, server: null, throttleChar: null, throttle: 0.0, isConnecting: false });
+
+            // ── BLE device references ───────────────────────────────
+            // Steering controller (hand controller with tilt sensor, vibration, button, BPM)
+            const btRef = useRef({
+                device: null, server: null,
+                sensorChar: null, vibeChar: null, buttonChar: null,
+                tilt: 0, isConnecting: false
+            });
+            const tiltOffsetRef = useRef(0); // Software calibration offset for tilt sensor
+
+            // Throttle controller (foot pedal with rotary encoder)
+            const throttleBtRef = useRef({
+                device: null, server: null, throttleChar: null,
+                throttle: 0.0, isConnecting: false
+            });
+
+            // ── Audio refs ──────────────────────────────────────────
             const audioCtxRef = useRef(null);
             const musicRef = useRef(null);
-            const gameStateRef = useRef({ isGameOver: false, isPaused: false, score: 0, lives: 3, movingTime: 0, totalDistance: 0, gridRows: [], opponents: [], clouds: [], birds: [], difficulty: 'Progressive', gameStarted: false, gameTime: 12, isRaining: false, streetLamps: [], sparkParticles: [], buildingWindows: [] });
+
+            // ── Game state (mutable ref for use inside animation loop) ──
+            const gameStateRef = useRef({
+                isGameOver: false, isPaused: false,
+                score: 0, lives: 3,
+                movingTime: 0, totalDistance: 0,
+                gridRows: [], opponents: [],
+                clouds: [], birds: [],
+                difficulty: 'Progressive',
+                gameStarted: false,
+                sparkParticles: [],
+                needsReset: false
+            });
+
+            // ── BLE Service & Characteristic UUIDs ──────────────────
+            // Steering controller (hand controller)
             const SERVICE_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214";
-            const SENSOR_CHAR_UUID = "19b10001-e8f2-537e-4f6c-d104768a1214";
-            const VIBE_CHAR_UUID = "19b10002-e8f2-537e-4f6c-d104768a1214";
-            const BUTTON_CHAR_UUID = "19b10003-e8f2-537e-4f6c-d104768a1214";
-            const BPM_CHAR_UUID = "19b10004-e8f2-537e-4f6c-d104768a1214";
+            const SENSOR_CHAR_UUID = "19b10001-e8f2-537e-4f6c-d104768a1214";  // Tilt angle (float32)
+            const VIBE_CHAR_UUID = "19b10002-e8f2-537e-4f6c-d104768a1214";  // Vibration motor
+            const BUTTON_CHAR_UUID = "19b10003-e8f2-537e-4f6c-d104768a1214";  // Physical button
+            const BPM_CHAR_UUID = "19b10004-e8f2-537e-4f6c-d104768a1214";  // Heart rate (MAX30102)
+
+            // Throttle controller (foot pedal — matches Bike.ino)
             const THROTTLE_SERVICE_UUID = "19b20000-e8f2-537e-4f6c-d104768a1214";
-            const THROTTLE_CHAR_UUID = "19b20001-e8f2-537e-4f6c-d104768a1214";
+            const THROTTLE_CHAR_UUID = "19b20001-e8f2-537e-4f6c-d104768a1214";  // Speed (float32)
+
+            // Load persisted high score on mount
             useEffect(() => { const saved = localStorage.getItem('blockyRacerHighScore'); if (saved) setHighScore(parseInt(saved)); }, []);
 
             useEffect(() => {
@@ -551,8 +614,14 @@
             const updateVibeStatus = (status, isSuccess) => { const statusEl = document.getElementById('vibeStatus'); if (statusEl) { statusEl.innerText = status; statusEl.className = isSuccess ? 'vibe-success' : 'vibe-fail'; } };
             const updateVibeCount = () => { vibeCountRef.current++; const countEl = document.getElementById('vibeCount'); if (countEl) countEl.innerText = vibeCountRef.current; };
             const updateLastError = (error) => { const errorEl = document.getElementById('lastError'); if (errorEl) errorEl.innerText = error; };
+            // ── BLE Disconnect Handlers ────────────────────────────
+            // Called when a BLE device is unexpectedly disconnected.
             const onDisconnected = () => { console.log("⚠️ DEVICE DISCONNECTED"); setBtConnected(false); setBtConnecting(false); if (btRef.current) { btRef.current.tilt = 0; btRef.current.device = null; btRef.current.server = null; btRef.current.sensorChar = null; btRef.current.vibeChar = null; btRef.current.buttonChar = null; btRef.current.isConnecting = false; } window.updateDebug("DISCONNECTED", 0, "---"); updateVibeStatus("Disconnected", false); };
             const onThrottleDisconnected = () => { console.log("⚠️ THROTTLE DEVICE DISCONNECTED"); setThBtConnected(false); setThBtConnecting(false); if (throttleBtRef.current) { throttleBtRef.current.throttle = 0.0; throttleBtRef.current.device = null; throttleBtRef.current.server = null; throttleBtRef.current.throttleChar = null; throttleBtRef.current.isConnecting = false; } window.updateThrottleDebug("DISCONNECTED", 0.0); };
+
+            // ── connectBluetooth() — Hand Controller (Steering) ───────
+            // Connects to the steering BLE device, subscribes to tilt sensor,
+            // button, vibration, and optional BPM characteristics.
             const connectBluetooth = async (isReconnect = false) => {
                 if (btRef.current.isConnecting) { console.log("⏸️ Connection in progress"); return; }
                 try {
@@ -570,7 +639,7 @@
                         } catch (e) {
                             console.warn(`Attempt ${attempt} failed:`, e.message);
                             if (attempt === 3) throw e;
-                            try { device.gatt.disconnect(); } catch (_) {}
+                            try { device.gatt.disconnect(); } catch (_) { }
                             await new Promise(resolve => setTimeout(resolve, 500 * attempt));
                         }
                     }
@@ -599,6 +668,10 @@
                     setBtConnected(true); setBtConnecting(false); window.updateDebug("CONNECTED", 0, "CENTER"); updateVibeStatus("Ready", true); console.log("✅ Connected!");
                 } catch (error) { console.error("❌ Connection error:", error); btRef.current.isConnecting = false; setBtConnecting(false); setBtConnected(false); window.updateDebug("ERROR", null, null); updateLastError(error.message); alert(`Connection Failed: ${error.message}`); }
             };
+
+            // ── connectThrottleBluetooth() — Foot Pedal (Throttle) ────
+            // Connects to the throttle BLE device (Bike.ino) and subscribes
+            // to the float32 speed characteristic.
             const connectThrottleBluetooth = async (isReconnect = false) => {
                 if (throttleBtRef.current.isConnecting) { console.log("⏸️ Throttle connection in progress"); return; }
                 try {
@@ -615,6 +688,8 @@
             };
 
             // === CALIBRATION & RECONNECT WINDOW FUNCTIONS ===
+            // These are exposed on `window` so they can be called from
+            // debug buttons and the HUD calibrate button.
             window.calibrateTilt = () => {
                 // Software calibration: store offset
                 tiltOffsetRef.current = btRef.current.tilt + tiltOffsetRef.current;
@@ -632,19 +707,19 @@
             };
             window.reconnectSteering = () => { connectBluetooth(true); };
             window.reconnectThrottle = () => { connectThrottleBluetooth(true); };
+            // ── Vibration Helpers ──────────────────────────────────
             const sendCalibration = async () => { if (!btRef.current.vibeChar) { alert("Not connected!"); return; } try { const data = new Uint8Array([67]); await btRef.current.vibeChar.writeValueWithoutResponse(data); console.log("✅ Calibration sent"); updateVibeStatus("Calibrating...", true); } catch (err) { console.error("❌ Calibration failed:", err); updateVibeStatus("FAIL: " + err.message, false); } };
             const sendVibration = async (fromCrash = false, duration = 400) => { if (!btRef.current.vibeChar) { console.error("❌ Not connected"); return; } if (!fromCrash && vibeTimeoutRef.current) { return; } try { const data = new Uint8Array([1]); await btRef.current.vibeChar.writeValueWithoutResponse(data); console.log(`✅ Vibe sent (${duration}ms)`); updateVibeStatus("Sent!", true); updateVibeCount(); updateLastError("None"); if (!fromCrash) { vibeTimeoutRef.current = setTimeout(() => { vibeTimeoutRef.current = null; }, 1000); } } catch (err) { console.error("❌ Vibe failed:", err); updateVibeStatus("FAIL: " + err.message, false); updateLastError(err.message); } };
             const resetHighScore = () => { if (confirm("Reset high score to 0?")) { localStorage.setItem('blockyRacerHighScore', '0'); setHighScore(0); alert("High score reset!"); } };
+
+            // ── Keyboard & Button Event Bindings ────────────────────
             useEffect(() => { const calibBtn = document.getElementById('calibBtn'); const testBtn = document.getElementById('testVibeBtn'); const reconnectBtn = document.getElementById('reconnectBtn'); const reconnectThrottleBtn = document.getElementById('reconnectThrottleBtn'); if (calibBtn) calibBtn.onclick = sendCalibration; if (testBtn) testBtn.onclick = () => sendVibration(false); if (reconnectBtn) reconnectBtn.onclick = () => connectBluetooth(false); if (reconnectThrottleBtn) reconnectThrottleBtn.onclick = () => connectThrottleBluetooth(false); const handleKeyPress = (e) => { if (e.code === 'Space' && gameStateRef.current.isGameOver) { e.preventDefault(); triggerRestart(); } }; window.addEventListener('keydown', handleKeyPress); return () => window.removeEventListener('keydown', handleKeyPress); }, []);
+
+            // ── Menu / Difficulty / Restart Helpers ──────────────────
             const toggleMenu = () => { if (gameOver || !gameStarted) return; setMenuOpen(!menuOpen); gameStateRef.current.isPaused = !menuOpen; };
             const changeDifficulty = (mode) => { gameStateRef.current.difficulty = mode; setUiDifficulty(mode); };
-            const triggerRestart = () => { console.log("🔄 Restarting..."); setGameOver(false); setScore(0); setLives(3); setNewRecord(false); setMenuOpen(false); setGameStarted(true); const ref = gameStateRef.current; ref.isGameOver = false; ref.isPaused = false; ref.score = 0; ref.lives = 3; ref.movingTime = 0; ref.totalDistance = 0; ref.gameStarted = true; ref.opponents.forEach(o => { if (o.mesh && o.mesh.parent) o.mesh.parent.remove(o.mesh); }); ref.opponents = []; for (let i = 0; i < ref.gridRows.length; i++) { ref.gridRows[i].z = -350 + (i * 15); ref.gridRows[i].mesh.position.z = ref.gridRows[i].z; ref.gridRows[i].mesh.position.x = 0; ref.gridRows[i].mesh.rotation.y = 0; updateRowVisuals(ref.gridRows[i], true); } };
+            const triggerRestart = () => { console.log("🔄 Restarting..."); setGameOver(false); setScore(0); setLives(3); setNewRecord(false); setMenuOpen(false); setGameStarted(true); const ref = gameStateRef.current; ref.isGameOver = false; ref.isPaused = false; ref.score = 0; ref.lives = 3; ref.movingTime = 0; ref.totalDistance = 0; ref.gameStarted = true; ref.needsReset = true; ref.opponents.forEach(o => { if (o.mesh && o.mesh.parent) o.mesh.parent.remove(o.mesh); }); ref.opponents = []; for (let i = 0; i < ref.gridRows.length; i++) { ref.gridRows[i].z = -350 + (i * 15); ref.gridRows[i].mesh.position.z = ref.gridRows[i].z; ref.gridRows[i].mesh.position.x = 0; ref.gridRows[i].mesh.rotation.y = 0; updateRowVisuals(ref.gridRows[i], true); } };
             const updateRowVisuals = (rowObj, isRural) => {
-                // Base tree visibility - reduced
-                rowObj.treeOuterL.visible = isRural && Math.random() > 0.7;
-                rowObj.treeOuterR.visible = isRural && Math.random() > 0.7;
-                rowObj.treeInnerL.visible = false;
-                rowObj.treeInnerR.visible = false;
                 rowObj.buildL.visible = false;
                 rowObj.buildR.visible = false;
 
@@ -652,50 +727,54 @@
                 if (rowObj.guardL) rowObj.guardL.visible = !isRural && Math.random() > 0.3;
                 if (rowObj.guardR) rowObj.guardR.visible = !isRural && Math.random() > 0.3;
 
-                // Road signs - always visible when present
+                // Road signs
                 if (rowObj.signL) rowObj.signL.visible = Math.random() > 0.2;
                 if (rowObj.signR) rowObj.signR.visible = Math.random() > 0.3;
 
                 if (isRural) {
-                    rowObj.treeInnerL.visible = Math.random() > 0.75;
-                    rowObj.treeInnerR.visible = Math.random() > 0.75;
+                    // Rural: scattered trees
+                    rowObj.treeInnerL.visible = Math.random() > 0.7;
+                    rowObj.treeInnerR.visible = Math.random() > 0.7;
+                    rowObj.treeMidL.visible = Math.random() > 0.65;
+                    rowObj.treeMidR.visible = Math.random() > 0.65;
+                    rowObj.treeOuterL.visible = Math.random() > 0.7;
+                    rowObj.treeOuterR.visible = Math.random() > 0.7;
                     if (Math.random() > 0.85) {
                         setBuildingType(rowObj.buildL, 'house');
                         rowObj.buildL.visible = true;
-                        rowObj.treeInnerL.visible = false;
+                        rowObj.treeMidL.visible = false;
                     }
                     if (Math.random() > 0.85) {
                         setBuildingType(rowObj.buildR, 'house');
                         rowObj.buildR.visible = true;
-                        rowObj.treeInnerR.visible = false;
+                        rowObj.treeMidR.visible = false;
                     }
                 } else {
-                    // City area - reduced buildings (less dense)
-                    if (Math.random() > 0.6) {
-                        setBuildingType(rowObj.buildL, 'random');
-                        rowObj.buildL.visible = true;
-                    }
-                    if (Math.random() > 0.6) {
-                        setBuildingType(rowObj.buildR, 'random');
-                        rowObj.buildR.visible = true;
+                    // City: trees near road, buildings further out
+                    rowObj.treeInnerL.visible = Math.random() > 0.4;
+                    rowObj.treeInnerR.visible = Math.random() > 0.4;
+                    rowObj.treeMidL.visible = false;
+                    rowObj.treeMidR.visible = false;
+                    rowObj.treeOuterL.visible = false;
+                    rowObj.treeOuterR.visible = false;
+                    const rowIndex = gameStateRef.current.gridRows.indexOf(rowObj);
+                    if (rowIndex % 2 === 0) {
+                        if (Math.random() > 0.4) {
+                            setBuildingType(rowObj.buildL, 'random');
+                            rowObj.buildL.visible = true;
+                        }
+                        if (Math.random() > 0.4) {
+                            setBuildingType(rowObj.buildR, 'random');
+                            rowObj.buildR.visible = true;
+                        }
                     }
                 }
             };
+
+            // ── Visual Effects Helpers ───────────────────────────────
+            // setBuildingType: Show a specific building variant inside a multi-building group.
             const setBuildingType = (group, type) => { group.children.forEach(c => c.visible = false); let idx = 0; if (type === 'house') idx = 0; else { const choices = [3, 4, 5]; idx = choices[Math.floor(Math.random() * choices.length)]; } if (idx < group.children.length) group.children[idx].visible = true; };
 
-            // Visual Effects Helpers
-            const getSkyColor = (hour) => {
-                if (hour >= 6 && hour < 8) return new THREE.Color().lerpColors(new THREE.Color(0x1a1a3e), new THREE.Color(0xff9966), (hour - 6) / 2); // Dawn
-                if (hour >= 8 && hour < 17) return new THREE.Color(0x87CEEB); // Day
-                if (hour >= 17 && hour < 19) return new THREE.Color().lerpColors(new THREE.Color(0x87CEEB), new THREE.Color(0xff6633), (hour - 17) / 2); // Sunset
-                if (hour >= 19 && hour < 21) return new THREE.Color().lerpColors(new THREE.Color(0xff6633), new THREE.Color(0x2a2a5e), (hour - 19) / 2); // Dusk
-                return new THREE.Color(0x2a2a5e); // Night
-            };
-            const getFogColor = (hour) => {
-                if (hour >= 6 && hour < 19) return new THREE.Color(0xaaccff);
-                return new THREE.Color(0x333366);
-            };
-            const isNight = (hour) => hour < 6 || hour >= 19;
             // Blink player car on collision (disappear/reappear every 0.25s for 1 second)
             const hidePlayerCar = (playerCarMesh) => {
                 if (!playerCarMesh) return;
@@ -727,27 +806,46 @@
                 const el = document.getElementById('speed-lines');
                 if (el) el.style.opacity = Math.min(1, Math.max(0, (speed - 0.8) * 2));
             };
-            const updateTimeDisplay = (hour) => {
-                const el = document.getElementById('time-display');
-                if (!el) return;
-                const h = Math.floor(hour);
-                const m = Math.floor((hour % 1) * 60);
-                const icon = hour >= 6 && hour < 19 ? '☀️' : '🌙';
-                el.innerText = `${icon} ${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-            };
 
+            // ═══════════════════════════════════════════════════════════
+            //  Three.js Scene Setup (useEffect — runs once on mount)
+            // ═══════════════════════════════════════════════════════════
             useEffect(() => {
-                if (!mountRef.current) return; const scene = new THREE.Scene(); scene.background = new THREE.Color(0x87CEEB); scene.fog = new THREE.Fog(0xaaccff, 10, 280); const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000); const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' }); renderer.setSize(window.innerWidth, window.innerHeight); renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; mountRef.current.appendChild(renderer.domElement);
+                if (!mountRef.current) return;
+
+                // ── Renderer & Scene ──────────────────────────────────
+                const scene = new THREE.Scene();
+                scene.background = new THREE.Color(0x87CEEB);      // Sky blue
+                scene.fog = new THREE.Fog(0xaaccff, 10, 280);      // Distance fog
+                const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+                const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+                renderer.shadowMap.enabled = true;
+                renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                mountRef.current.appendChild(renderer.domElement);
+
+                // ── Sky Background Texture ────────────────────────────
                 new THREE.TextureLoader().load('https://images.unsplash.com/photo-1513002749550-c59d786b8e6c?q=80&w=2560&auto=format&fit=crop', (t) => {
                     scene.background = t;
                     const l = document.getElementById('loader'); if (l) { l.style.opacity = 0; setTimeout(() => l.style.display = 'none', 500); }
-                }); const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); scene.add(ambientLight); const dirLight = new THREE.DirectionalLight(0xffffff, 1.2); dirLight.position.set(100, 150, 50); dirLight.castShadow = true; dirLight.shadow.mapSize.width = 1024; dirLight.shadow.mapSize.height = 1024; dirLight.shadow.camera.left = -200; dirLight.shadow.camera.right = 200; dirLight.shadow.camera.top = 200; dirLight.shadow.camera.bottom = -200; scene.add(dirLight);
-                // Store light refs for dynamic updates
-                const lightsRef = { ambient: ambientLight, directional: dirLight };
-                // Create player headlights for night
-                const headlightL = new THREE.SpotLight(0xffffcc, 0, 50, Math.PI / 6, 0.5); headlightL.position.set(-1, 1, -3);
-                const headlightR = new THREE.SpotLight(0xffffcc, 0, 50, Math.PI / 6, 0.5); headlightR.position.set(1, 1, -3);
-                // Spark particle pool
+                });
+
+                // ── Lighting ─────────────────────────────────────────
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                scene.add(ambientLight);
+                const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+                dirLight.position.set(100, 150, 50);
+                dirLight.castShadow = true;
+                dirLight.shadow.mapSize.width = 512;
+                dirLight.shadow.mapSize.height = 512;
+                dirLight.shadow.camera.left = -200;
+                dirLight.shadow.camera.right = 200;
+                dirLight.shadow.camera.top = 200;
+                dirLight.shadow.camera.bottom = -200;
+                scene.add(dirLight);
+
+                // ── Spark Particle Pool (collision sparks) ─────────────
                 const sparkMat = new THREE.MeshBasicMaterial({ color: 0xff6600 });
                 for (let i = 0; i < 30; i++) {
                     const spark = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.15), sparkMat.clone());
@@ -765,6 +863,10 @@
                         }
                     }
                 };
+
+                // ── Window Texture Generator ──────────────────────────
+                // Creates a procedural canvas texture simulating building
+                // windows with randomized lit/dark panes.
                 const createModernWindowTexture = (density) => {
                     const size = 256;
                     const canvas = document.createElement('canvas'); canvas.width = size; canvas.height = size;
@@ -798,536 +900,305 @@
                     return tex;
                 };
 
-                // Create glowing window for night
-                const createWindowLight = (width, height) => {
-                    const windowMat = new THREE.MeshBasicMaterial({ color: 0xffeeaa, transparent: true, opacity: 0 });
-                    const windowMesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, 0.1), windowMat);
-                    windowMesh.userData.isWindowLight = true;
-                    return windowMesh;
+
+                // ── Pre-cached Material & Texture Pools ───────────────
+                // Avoids creating 240+ canvas draws per building by
+                // sharing materials and textures across all instances.
+                const colorTints = [0xcc9999, 0x99ccbb, 0xbbbb99, 0x9999cc, 0xccbb99, 0x99bbcc, 0xdd8888, 0x88dd88, 0x8888dd, 0xdddd88, 0xC4A77D, 0xB8956E, 0xA68B5B, 0xD4B896, 0xBBAA88];
+                const accentColors = [0x444466, 0x664444, 0x446644, 0x556655, 0x665544, 0x445566, 0x5A4A3A, 0x6B5B4B];
+                const cachedWinTextures = [0.5, 0.65, 0.8, 0.95].map(d => createModernWindowTexture(d));
+                const cachedBaseTextures = [createModernWindowTexture(0.1), createModernWindowTexture(0.15)];
+                const cachedConcreteMats = colorTints.map(c => new THREE.MeshLambertMaterial({ color: c }));
+                const cachedAccentMats = accentColors.map(c => new THREE.MeshLambertMaterial({ color: c }));
+                const cachedWinMats = cachedWinTextures.map(t => new THREE.MeshLambertMaterial({ map: t }));
+                const cachedBaseMats = cachedBaseTextures.map(t => new THREE.MeshLambertMaterial({ map: t }));
+
+                // Global shared materials (avoid recreating in loops)
+                const matCache = {
+                    brown: new THREE.MeshLambertMaterial({ color: 0x8B4513 }),
+                    doorFrame: new THREE.MeshLambertMaterial({ color: 0x2F1810 }),
+                    door: new THREE.MeshLambertMaterial({ color: 0x4A2511 }),
+                    handle: new THREE.MeshLambertMaterial({ color: 0xCCAA00 }),
+                    window: new THREE.MeshLambertMaterial({ color: 0x88ccff }),
+                    shutter: new THREE.MeshLambertMaterial({ color: 0x2E5E4E }),
+                    awning: new THREE.MeshLambertMaterial({ color: 0x663333 }),
+                    pillarWhite: new THREE.MeshLambertMaterial({ color: 0xeeeeee }),
+                    garageDoor: new THREE.MeshLambertMaterial({ color: 0x555555 }),
+                    dark222: new THREE.MeshLambertMaterial({ color: 0x222222 }),
+                    dark333: new THREE.MeshLambertMaterial({ color: 0x333333 }),
+                    dark444: new THREE.MeshLambertMaterial({ color: 0x444444 }),
+                    grey555: new THREE.MeshLambertMaterial({ color: 0x555555 }),
+                    grey666: new THREE.MeshLambertMaterial({ color: 0x666666 }),
+                    grey777: new THREE.MeshLambertMaterial({ color: 0x777777 }),
+                    grey888: new THREE.MeshLambertMaterial({ color: 0x888888 }),
+                    greyAAA: new THREE.MeshLambertMaterial({ color: 0xaaaaaa }),
+                    greyCCC: new THREE.MeshLambertMaterial({ color: 0xcccccc }),
+                    grey4a: new THREE.MeshLambertMaterial({ color: 0x4a4a4a }),
+                    grey5a: new THREE.MeshLambertMaterial({ color: 0x5a5a5a }),
+                    entrance: new THREE.MeshLambertMaterial({ color: 0x88aacc, transparent: true, opacity: 0.7 }),
+                    glassRail: new THREE.MeshLambertMaterial({ color: 0x88ccdd, transparent: true, opacity: 0.5 }),
+                    bridgeGlass: new THREE.MeshLambertMaterial({ color: 0x88ccdd, transparent: true, opacity: 0.6 }),
+                    lobbyDoor: new THREE.MeshLambertMaterial({ color: 0x88aacc, transparent: true, opacity: 0.6 }),
+                    glass: new THREE.MeshLambertMaterial({ color: 0x00CED1, transparent: true, opacity: 0.8 }),
+                    canopyGlass: new THREE.MeshLambertMaterial({ color: 0x88ddee, transparent: true, opacity: 0.5 }),
+                    redLight: new THREE.MeshBasicMaterial({ color: 0xff0000 }),
+                    cyanLed: new THREE.MeshBasicMaterial({ color: 0x00ffff }),
+                    yellow: new THREE.MeshLambertMaterial({ color: 0xffff00 }),
+                    redFlag: new THREE.MeshLambertMaterial({ color: 0xff0000, side: THREE.DoubleSide }),
+                    crane: new THREE.MeshLambertMaterial({ color: 0xffaa00 }),
+                    blue06: new THREE.MeshLambertMaterial({ color: 0x0066cc }),
+                    winBlue: new THREE.MeshLambertMaterial({ color: 0x88aacc }),
+                    chimneyDark: new THREE.MeshLambertMaterial({ color: 0x333333 }),
+                    trunk: new THREE.MeshLambertMaterial({ color: 0x5C4033 }),
                 };
 
+                // ── Shared Geometries (geometry caching) ──────────────
+                // Avoids recreating identical BoxGeometry, CylinderGeometry,
+                // and SphereGeometry objects in loops.
+                const geoCache = {};
+                const getBoxGeo = (w, h, d) => {
+                    const key = `b${w}_${h}_${d}`;
+                    if (!geoCache[key]) geoCache[key] = new THREE.BoxGeometry(w, h, d);
+                    return geoCache[key];
+                };
+                const getCylGeo = (rt, rb, h, seg) => {
+                    const key = `c${rt}_${rb}_${h}_${seg}`;
+                    if (!geoCache[key]) geoCache[key] = new THREE.CylinderGeometry(rt, rb, h, seg);
+                    return geoCache[key];
+                };
+                const getSphGeo = (r, ws, hs) => {
+                    const key = `s${r}_${ws}_${hs}`;
+                    if (!geoCache[key]) geoCache[key] = new THREE.SphereGeometry(r, ws, hs);
+                    return geoCache[key];
+                };
+
+                // ── createMultiBuilding() ───────────────────────────
+                // Creates a group with 6 building variants (0–5):
+                //   0 = House,  1 = Stepped Tower,  2 = Linear High-Rise,
+                //   3 = Modern Twin,  4 = Glass Tower,  5 = Factory.
+                // Only one variant is visible at a time.
                 const createMultiBuilding = () => {
                     const root = new THREE.Group();
-                    root.userData.windowLights = []; // Track windows for this building
-                    // Merged color palette: original vibrant + brown/tan colors
-                    const colorTints = [0xcc9999, 0x99ccbb, 0xbbbb99, 0x9999cc, 0xccbb99, 0x99bbcc, 0xdd8888, 0x88dd88, 0x8888dd, 0xdddd88, 0xC4A77D, 0xB8956E, 0xA68B5B, 0xD4B896, 0xBBAA88];
-                    const accentColors = [0x444466, 0x664444, 0x446644, 0x556655, 0x665544, 0x445566, 0x5A4A3A, 0x6B5B4B];
-                    // PBR Buildings
-                    const concreteMat = new THREE.MeshLambertMaterial({ color: colorTints[Math.floor(Math.random() * colorTints.length)] });
-                    const darkMat = new THREE.MeshLambertMaterial({ color: accentColors[Math.floor(Math.random() * accentColors.length)] });
-
-                    const winDensity = 0.5 + Math.random() * 0.5;
-                    const winTex = createModernWindowTexture(winDensity);
-                    const buildingMat = new THREE.MeshLambertMaterial({ map: winTex });
-
-                    const baseTex = createModernWindowTexture(0.1);
-                    const baseMat = new THREE.MeshLambertMaterial({ map: baseTex });
+                    const concreteMat = cachedConcreteMats[Math.floor(Math.random() * cachedConcreteMats.length)];
+                    const darkMat = cachedAccentMats[Math.floor(Math.random() * cachedAccentMats.length)];
+                    const buildingMat = cachedWinMats[Math.floor(Math.random() * cachedWinMats.length)];
+                    const baseMat = cachedBaseMats[Math.floor(Math.random() * cachedBaseMats.length)];
 
                     // 0. House - Enhanced with more details
                     const g0 = new THREE.Group();
-                    const h0 = new THREE.Mesh(new THREE.BoxGeometry(8, 6, 8), concreteMat); h0.position.y = 3; h0.castShadow = true; g0.add(h0);
+                    const h0 = new THREE.Mesh(getBoxGeo(8, 6, 8), concreteMat); h0.position.y = 3; h0.castShadow = true; g0.add(h0);
                     const r0 = new THREE.Mesh(new THREE.ConeGeometry(6, 4, 4), darkMat); r0.position.y = 8; r0.rotation.y = Math.PI / 4; g0.add(r0);
-                    // Chimney
-                    const chimneyMat0 = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
-                    const chimney0 = new THREE.Mesh(new THREE.BoxGeometry(1, 3, 1), chimneyMat0);
+                    const chimney0 = new THREE.Mesh(getBoxGeo(1, 3, 1), matCache.brown);
                     chimney0.position.set(2.5, 8, -2); g0.add(chimney0);
-                    // Door with frame
-                    const doorFrameMat = new THREE.MeshLambertMaterial({ color: 0x2F1810 });
-                    const doorFrame = new THREE.Mesh(new THREE.BoxGeometry(2, 3, 0.1), doorFrameMat);
+                    const doorFrame = new THREE.Mesh(getBoxGeo(2, 3, 0.1), matCache.doorFrame);
                     doorFrame.position.set(0, 1.5, 4.05); g0.add(doorFrame);
-                    const door = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2.5, 0.2), new THREE.MeshLambertMaterial({ color: 0x4A2511 }));
+                    const door = new THREE.Mesh(getBoxGeo(1.5, 2.5, 0.2), matCache.door);
                     door.position.set(0, 1.25, 4.1); g0.add(door);
-                    // Door handle
-                    const handleMat = new THREE.MeshLambertMaterial({ color: 0xCCAA00 });
-                    const handle = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), handleMat);
+                    const handle = new THREE.Mesh(getSphGeo(0.1, 4, 4), matCache.handle);
                     handle.position.set(0.5, 1.3, 4.25); g0.add(handle);
-                    // Windows with shutters
-                    const winGeo = new THREE.BoxGeometry(1.8, 1.8, 0.2);
-                    const winMat = new THREE.MeshLambertMaterial({ color: 0x88ccff });
-                    const shutterMat = new THREE.MeshLambertMaterial({ color: 0x2E5E4E });
-                    const w1 = new THREE.Mesh(winGeo, winMat); w1.position.set(-2.5, 3.5, 4.1); g0.add(w1);
-                    const w2 = new THREE.Mesh(winGeo, winMat); w2.position.set(2.5, 3.5, 4.1); g0.add(w2);
-                    // Window shutters
-                    const shutterGeo = new THREE.BoxGeometry(0.4, 1.8, 0.1);
+                    const winGeo = getBoxGeo(1.8, 1.8, 0.2);
+                    const w1 = new THREE.Mesh(winGeo, matCache.window); w1.position.set(-2.5, 3.5, 4.1); g0.add(w1);
+                    const w2 = new THREE.Mesh(winGeo, matCache.window); w2.position.set(2.5, 3.5, 4.1); g0.add(w2);
+                    const shutterGeo = getBoxGeo(0.4, 1.8, 0.1);
                     [-2.5, 2.5].forEach(x => {
-                        const sL = new THREE.Mesh(shutterGeo, shutterMat); sL.position.set(x - 1.2, 3.5, 4.15); g0.add(sL);
-                        const sR = new THREE.Mesh(shutterGeo, shutterMat); sR.position.set(x + 1.2, 3.5, 4.15); g0.add(sR);
+                        const sL = new THREE.Mesh(shutterGeo, matCache.shutter); sL.position.set(x - 1.2, 3.5, 4.15); g0.add(sL);
+                        const sR = new THREE.Mesh(shutterGeo, matCache.shutter); sR.position.set(x + 1.2, 3.5, 4.15); g0.add(sR);
                     });
-                    // Porch/awning
-                    const awningMat = new THREE.MeshLambertMaterial({ color: 0x663333 });
-                    const awning = new THREE.Mesh(new THREE.BoxGeometry(3, 0.2, 1.5), awningMat);
+                    const awning = new THREE.Mesh(getBoxGeo(3, 0.2, 1.5), matCache.awning);
                     awning.position.set(0, 3, 4.5); g0.add(awning);
-                    // Porch pillars
-                    const pillarMat = new THREE.MeshLambertMaterial({ color: 0xeeeeee });
                     [-1.2, 1.2].forEach(x => {
-                        const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 3, 8), pillarMat);
+                        const pillar = new THREE.Mesh(getCylGeo(0.15, 0.15, 3, 6), matCache.pillarWhite);
                         pillar.position.set(x, 1.5, 5); g0.add(pillar);
                     });
-                    // Garage
-                    const garageMat = new THREE.MeshLambertMaterial({ color: concreteMat.color.getHex() * 0.9 });
-                    const garage = new THREE.Mesh(new THREE.BoxGeometry(5, 4, 6), garageMat);
+                    const garage = new THREE.Mesh(getBoxGeo(5, 4, 6), concreteMat);
                     garage.position.set(-6, 2, 1); g0.add(garage);
-                    const garageDoor = new THREE.Mesh(new THREE.BoxGeometry(3.5, 3, 0.2), new THREE.MeshLambertMaterial({ color: 0x555555 }));
+                    const garageDoor = new THREE.Mesh(getBoxGeo(3.5, 3, 0.2), matCache.garageDoor);
                     garageDoor.position.set(-6, 1.5, 4.1); g0.add(garageDoor);
-                    // Fence
-                    const fenceMat = new THREE.MeshLambertMaterial({ color: 0xeeeeee });
+                    const fencePostGeo = getBoxGeo(0.2, 1.5, 0.2);
                     for (let i = 0; i < 8; i++) {
-                        const post = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.5, 0.2), fenceMat);
+                        const post = new THREE.Mesh(fencePostGeo, matCache.pillarWhite);
                         post.position.set(-9 + i * 2.5, 0.75, 6); g0.add(post);
                     }
-                    const fenceRail = new THREE.Mesh(new THREE.BoxGeometry(18, 0.1, 0.15), fenceMat);
+                    const fenceRail = new THREE.Mesh(getBoxGeo(18, 0.1, 0.15), matCache.pillarWhite);
                     fenceRail.position.set(-2, 1.2, 6); g0.add(fenceRail);
                     root.add(g0);
 
-                    // 1. Stepped Tower - Enhanced with balconies and details
+                    // 1. Stepped Tower
                     const g1 = new THREE.Group();
                     {
                         const levels = 3;
                         let w = 10, h = 10, y = 0;
                         for (let i = 0; i < levels; i++) {
-                            const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), i === 0 ? baseMat : buildingMat);
+                            const b = new THREE.Mesh(getBoxGeo(w, h, w), i === 0 ? baseMat : buildingMat);
                             b.position.y = y + h / 2; b.castShadow = true; g1.add(b);
-                            // Add balconies on each level
                             if (i > 0) {
-                                const balconyMat = new THREE.MeshLambertMaterial({ color: 0x888888 });
-                                const railMat = new THREE.MeshLambertMaterial({ color: 0x444444 });
-                                for (let side = 0; side < 4; side++) {
+                                for (let side = 0; side < 2; side++) {
                                     if (Math.random() > 0.5) {
-                                        const balcony = new THREE.Mesh(new THREE.BoxGeometry(w * 0.3, 0.2, 1.5), balconyMat);
-                                        const rail = new THREE.Mesh(new THREE.BoxGeometry(w * 0.3, 0.5, 0.1), railMat);
-                                        const bx = side === 0 ? 0 : (side === 2 ? 0 : (side === 1 ? w / 2 + 0.7 : -w / 2 - 0.7));
-                                        const bz = side === 0 ? w / 2 + 0.7 : (side === 2 ? -w / 2 - 0.7 : 0);
+                                        const balcony = new THREE.Mesh(getBoxGeo(w * 0.3, 0.2, 1.5), matCache.grey888);
+                                        const bx = side === 0 ? 0 : (w / 2 + 0.7);
+                                        const bz = side === 0 ? w / 2 + 0.7 : 0;
                                         balcony.position.set(bx, y + 2, bz);
-                                        rail.position.set(bx, y + 2.4, bz + (side === 0 ? 0.7 : (side === 2 ? -0.7 : 0)));
-                                        if (side === 1 || side === 3) {
-                                            balcony.rotation.y = Math.PI / 2;
-                                            rail.rotation.y = Math.PI / 2;
-                                        }
-                                        g1.add(balcony); g1.add(rail);
+                                        if (side === 1) balcony.rotation.y = Math.PI / 2;
+                                        g1.add(balcony);
                                     }
                                 }
                             }
                             y += h; h *= 0.8; w *= 0.8;
                         }
-                        // Entrance canopy
-                        const canopyMat = new THREE.MeshLambertMaterial({ color: 0x333333 });
-                        const canopy = new THREE.Mesh(new THREE.BoxGeometry(6, 0.3, 3), canopyMat);
+                        const canopy = new THREE.Mesh(getBoxGeo(6, 0.3, 3), matCache.dark333);
                         canopy.position.set(0, 3.5, 6); g1.add(canopy);
-                        // Entrance doors
-                        const entranceMat = new THREE.MeshLambertMaterial({ color: 0x88aacc, transparent: true, opacity: 0.7 });
-                        const entranceDoor = new THREE.Mesh(new THREE.BoxGeometry(4, 3, 0.2), entranceMat);
+                        const entranceDoor = new THREE.Mesh(getBoxGeo(4, 3, 0.2), matCache.entrance);
                         entranceDoor.position.set(0, 1.5, 5.1); g1.add(entranceDoor);
-                        // Pillars
-                        const pillarMat1 = new THREE.MeshLambertMaterial({ color: 0x666666 });
                         [-2.5, 2.5].forEach(x => {
-                            const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 3.5, 8), pillarMat1);
+                            const pillar = new THREE.Mesh(getCylGeo(0.3, 0.3, 3.5, 6), matCache.grey666);
                             pillar.position.set(x, 1.75, 6); g1.add(pillar);
                         });
-                        // Rooftop water tower
-                        const towerMat = new THREE.MeshLambertMaterial({ color: 0x5a5a5a });
-                        const waterTower = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.2, 3, 8), towerMat);
+                        const waterTower = new THREE.Mesh(getCylGeo(1, 1.2, 3, 6), matCache.grey5a);
                         waterTower.position.set(2, y + 1.5, -2); g1.add(waterTower);
-                        // Tower legs
-                        const legMat = new THREE.MeshLambertMaterial({ color: 0x333333 });
-                        [[-0.6, -0.6], [0.6, -0.6], [-0.6, 0.6], [0.6, 0.6]].forEach(([lx, lz]) => {
-                            const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 2, 6), legMat);
-                            leg.position.set(2 + lx, y - 0.5, -2 + lz); g1.add(leg);
-                        });
                     }
                     root.add(g1);
 
-                    // 2. Linear High-Rise with rooftop details and fire escape
+                    // 2. Linear High-Rise
                     const g2 = new THREE.Group();
                     {
                         const h = 45, w = 10;
-                        const core = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), buildingMat);
+                        const core = new THREE.Mesh(getBoxGeo(w, h, w), buildingMat);
                         core.position.y = h / 2; core.castShadow = true; g2.add(core);
-                        const pGeo = new THREE.BoxGeometry(1, h, 1);
+                        const pGeo = getBoxGeo(1, h, 1);
                         [1, -1].forEach(x => [1, -1].forEach(z => {
                             const p = new THREE.Mesh(pGeo, concreteMat);
                             p.position.set(x * w / 2, h / 2, z * w / 2); g2.add(p);
                         }));
-                        // Fire escape on one side
-                        const fireMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
-                        const fireRailMat = new THREE.MeshLambertMaterial({ color: 0x333333 });
-                        for (let floor = 0; floor < 8; floor++) {
-                            const platform = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.15, 2), fireMat);
-                            platform.position.set(-w / 2 - 1.2, 5 + floor * 5, 0); g2.add(platform);
-                            // Rails
-                            const rail1 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.2, 2), fireRailMat);
-                            rail1.position.set(-w / 2 - 2.3, 5.6 + floor * 5, 0); g2.add(rail1);
-                            const rail2 = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.08, 0.08), fireRailMat);
-                            rail2.position.set(-w / 2 - 1.2, 6.2 + floor * 5, 0.95); g2.add(rail2);
-                            // Stairs (diagonal)
-                            if (floor < 7) {
-                                const stairs = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.1, 2.5), fireMat);
-                                stairs.rotation.z = -Math.PI / 4;
-                                stairs.position.set(-w / 2 - 0.5, 7.5 + floor * 5, 0); g2.add(stairs);
-                            }
+                        // Fire escape (reduced from 8 to 4 platforms)
+                        const platGeo = getBoxGeo(2.5, 0.15, 2);
+                        for (let floor = 0; floor < 4; floor++) {
+                            const platform = new THREE.Mesh(platGeo, matCache.dark222);
+                            platform.position.set(-w / 2 - 1.2, 5 + floor * 10, 0); g2.add(platform);
                         }
-                        // Balconies on front side
-                        const balconyMat2 = new THREE.MeshLambertMaterial({ color: 0x666666 });
-                        for (let floor = 1; floor < 9; floor++) {
-                            if (Math.random() > 0.3) {
-                                const balcony = new THREE.Mesh(new THREE.BoxGeometry(3, 0.2, 1.5), balconyMat2);
-                                balcony.position.set(0, floor * 5, w / 2 + 0.7); g2.add(balcony);
-                                // Glass railing
-                                const glassRail = new THREE.Mesh(new THREE.BoxGeometry(3, 1, 0.1), new THREE.MeshLambertMaterial({ color: 0x88ccdd, transparent: true, opacity: 0.5 }));
-                                glassRail.position.set(0, floor * 5 + 0.6, w / 2 + 1.4); g2.add(glassRail);
-                            }
+                        // Balconies on front side (reduced)
+                        for (let floor = 2; floor < 9; floor += 2) {
+                            const balcony = new THREE.Mesh(getBoxGeo(3, 0.2, 1.5), matCache.grey666);
+                            balcony.position.set(0, floor * 5, w / 2 + 0.7); g2.add(balcony);
                         }
-                        // Rooftop details - AC units
-                        const acMat = new THREE.MeshLambertMaterial({ color: 0x888888 });
-                        for (let i = 0; i < 3; i++) {
-                            const ac = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1, 2), acMat);
-                            ac.position.set(-3 + i * 3, h + 0.5, -2);
-                            g2.add(ac);
+                        // Rooftop AC units
+                        const acGeo = getBoxGeo(1.5, 1, 2);
+                        for (let i = 0; i < 2; i++) {
+                            const ac = new THREE.Mesh(acGeo, matCache.grey888);
+                            ac.position.set(-2 + i * 4, h + 0.5, -2); g2.add(ac);
                         }
-                        // Water tank
-                        const tankMat = new THREE.MeshLambertMaterial({ color: 0x4a4a4a });
-                        const tank = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 4, 12), tankMat);
-                        tank.position.set(3, h + 2, 3);
-                        g2.add(tank);
-                        // Antenna
-                        const antMat = new THREE.MeshLambertMaterial({ color: 0x333333 });
-                        const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 6, 6), antMat);
-                        antenna.position.set(0, h + 3, 0);
-                        g2.add(antenna);
-                        // Satellite dish
-                        const dishMat = new THREE.MeshLambertMaterial({ color: 0xcccccc });
-                        const dish = new THREE.Mesh(new THREE.SphereGeometry(0.8, 8, 8, 0, Math.PI), dishMat);
-                        dish.rotation.x = -Math.PI / 4;
-                        dish.position.set(-3, h + 1, 3);
-                        g2.add(dish);
-                        // Entrance lobby
-                        const lobbyMat = new THREE.MeshLambertMaterial({ color: 0x444444 });
-                        const lobby = new THREE.Mesh(new THREE.BoxGeometry(6, 4, 3), lobbyMat);
+                        const tank = new THREE.Mesh(getCylGeo(1.5, 1.5, 4, 8), matCache.grey4a);
+                        tank.position.set(3, h + 2, 3); g2.add(tank);
+                        const antenna = new THREE.Mesh(getCylGeo(0.1, 0.1, 6, 4), matCache.dark333);
+                        antenna.position.set(0, h + 3, 0); g2.add(antenna);
+                        const lobby = new THREE.Mesh(getBoxGeo(6, 4, 3), matCache.dark444);
                         lobby.position.set(0, 2, w / 2 + 1.5); g2.add(lobby);
-                        const lobbyDoor = new THREE.Mesh(new THREE.BoxGeometry(3, 3, 0.2), new THREE.MeshLambertMaterial({ color: 0x88aacc, transparent: true, opacity: 0.6 }));
-                        lobbyDoor.position.set(0, 1.5, w / 2 + 3.1); g2.add(lobbyDoor);
+                        const lobbyDoor2 = new THREE.Mesh(getBoxGeo(3, 3, 0.2), matCache.lobbyDoor);
+                        lobbyDoor2.position.set(0, 1.5, w / 2 + 3.1); g2.add(lobbyDoor2);
                     }
                     root.add(g2);
 
-                    // 3. Modern Twin with rooftop garden and sky bridge
+                    // 3. Modern Twin with sky bridge
                     const g3 = new THREE.Group();
                     {
                         const w = 14, pH = 6;
-                        const pod = new THREE.Mesh(new THREE.BoxGeometry(w, pH, w), baseMat);
+                        const pod = new THREE.Mesh(getBoxGeo(w, pH, w), baseMat);
                         pod.position.y = pH / 2; pod.castShadow = true; g3.add(pod);
-                        const t1 = new THREE.Mesh(new THREE.BoxGeometry(5, 30, 5), buildingMat);
+                        const t1 = new THREE.Mesh(getBoxGeo(5, 30, 5), buildingMat);
                         t1.position.set(-3, pH + 15, -3); t1.castShadow = true; g3.add(t1);
-                        const t2 = new THREE.Mesh(new THREE.BoxGeometry(5, 20, 5), buildingMat);
+                        const t2 = new THREE.Mesh(getBoxGeo(5, 20, 5), buildingMat);
                         t2.position.set(3, pH + 10, 3); t2.castShadow = true; g3.add(t2);
-                        // Sky bridge between towers
-                        const bridgeMat = new THREE.MeshLambertMaterial({ color: 0x555555 });
-                        const bridgeGlass = new THREE.MeshLambertMaterial({ color: 0x88ccdd, transparent: true, opacity: 0.6 });
-                        const bridge = new THREE.Mesh(new THREE.BoxGeometry(8, 2, 3), bridgeMat);
+                        const bridge = new THREE.Mesh(getBoxGeo(8, 2, 3), matCache.grey555);
                         bridge.position.set(0, pH + 14, 0);
                         bridge.rotation.y = Math.PI / 4; g3.add(bridge);
-                        const bridgeWin = new THREE.Mesh(new THREE.BoxGeometry(7.5, 1.5, 0.1), bridgeGlass);
-                        bridgeWin.position.set(0, pH + 14, 1.5);
-                        bridgeWin.rotation.y = Math.PI / 4; g3.add(bridgeWin);
-                        // Helipad on shorter tower with lights
-                        const helipadMat = new THREE.MeshLambertMaterial({ color: 0x444444 });
-                        const helipad = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 0.2, 16), helipadMat);
-                        helipad.position.set(3, pH + 20.1, 3);
-                        g3.add(helipad);
-                        // Helipad perimeter lights
-                        const helilightMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-                        for (let i = 0; i < 8; i++) {
-                            const light = new THREE.Mesh(new THREE.SphereGeometry(0.15, 6, 6), helilightMat);
-                            const angle = (i / 8) * Math.PI * 2;
-                            light.position.set(3 + Math.cos(angle) * 1.8, pH + 20.3, 3 + Math.sin(angle) * 1.8);
-                            g3.add(light);
-                        }
-                        // H marking
-                        const hMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
-                        const hBar1 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.05, 1.2), hMat);
-                        hBar1.position.set(3, pH + 20.25, 3);
-                        g3.add(hBar1);
-                        const hBar2 = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.05, 0.2), hMat);
-                        hBar2.position.set(3, pH + 20.25, 3);
-                        g3.add(hBar2);
-                        // Rooftop garden on podium
-                        const grassMat3 = new THREE.MeshLambertMaterial({ color: 0x228B22 });
-                        const garden = new THREE.Mesh(new THREE.BoxGeometry(5, 0.3, 5), grassMat3);
-                        garden.position.set(0, pH + 0.15, 0); g3.add(garden);
-                        // Small trees on garden
-                        const miniTreeMat = new THREE.MeshLambertMaterial({ color: 0x2d5a27 });
-                        const miniTrunkMat = new THREE.MeshLambertMaterial({ color: 0x5C4033 });
-                        [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([tx, tz]) => {
-                            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.15, 0.8, 6), miniTrunkMat);
-                            trunk.position.set(tx * 1.5, pH + 0.7, tz * 1.5); g3.add(trunk);
-                            const leaves = new THREE.Mesh(new THREE.SphereGeometry(0.5, 6, 6), miniTreeMat);
-                            leaves.position.set(tx * 1.5, pH + 1.3, tz * 1.5); g3.add(leaves);
-                        });
-                        // Rooftop AC on taller tower
-                        const acMat = new THREE.MeshLambertMaterial({ color: 0x666666 });
-                        const ac = new THREE.Mesh(new THREE.BoxGeometry(2, 1.5, 2), acMat);
-                        ac.position.set(-3, pH + 30.75, -3);
-                        g3.add(ac);
-                        // Antenna array
-                        const antMat3 = new THREE.MeshLambertMaterial({ color: 0x333333 });
-                        for (let i = 0; i < 3; i++) {
-                            const ant = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2 + i * 0.5, 6), antMat3);
-                            ant.position.set(-3 + i * 0.5, pH + 31.5 + i * 0.25, -3); g3.add(ant);
-                        }
-                        // Ground floor entrance
-                        const entranceMat3 = new THREE.MeshLambertMaterial({ color: 0x333333 });
-                        const entrance = new THREE.Mesh(new THREE.BoxGeometry(4, 3, 2), entranceMat3);
+                        const roofDome = new THREE.Mesh(new THREE.SphereGeometry(4, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), buildingMat);
+                        roofDome.position.set(0, pH, 0); g3.add(roofDome);
+                        const ac = new THREE.Mesh(getBoxGeo(2, 1.5, 2), matCache.grey666);
+                        ac.position.set(-3, pH + 30.75, -3); g3.add(ac);
+                        const antenna3 = new THREE.Mesh(getCylGeo(0.05, 0.05, 3, 4), matCache.dark333);
+                        antenna3.position.set(-3, pH + 31.5, -3); g3.add(antenna3);
+                        const entrance = new THREE.Mesh(getBoxGeo(4, 3, 2), matCache.dark333);
                         entrance.position.set(0, 1.5, w / 2 + 1); g3.add(entrance);
-                        const revolvingDoor = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 2.5, 16), new THREE.MeshLambertMaterial({ color: 0x88aacc, transparent: true, opacity: 0.5 }));
-                        revolvingDoor.position.set(0, 1.25, w / 2 + 2); g3.add(revolvingDoor);
                     }
                     root.add(g3);
 
-                    // 4. Glass Tower with crown lighting and modern details
+                    // 4. Glass Tower
                     const g4 = new THREE.Group();
                     {
-                        const glassMat = new THREE.MeshLambertMaterial({ color: 0x00CED1, transparent: true, opacity: 0.8 });
-                        const gw = new THREE.Mesh(new THREE.BoxGeometry(15, 30, 15), glassMat);
+                        const gw = new THREE.Mesh(getBoxGeo(15, 30, 15), matCache.glass);
                         gw.position.y = 15; gw.castShadow = true; g4.add(gw);
-                        // Floor separators with slight inset
-                        for (let i = 1; i < 10; i++) {
-                            const floorSep = new THREE.Mesh(new THREE.BoxGeometry(15.2, 0.3, 15.2), new THREE.MeshLambertMaterial({ color: 0x444444 }));
+                        // Floor separators (reduced from 9 to 5)
+                        const sepGeo = getBoxGeo(15.2, 0.3, 15.2);
+                        for (let i = 1; i < 10; i += 2) {
+                            const floorSep = new THREE.Mesh(sepGeo, matCache.dark444);
                             floorSep.position.y = i * 3; g4.add(floorSep);
                         }
-                        // Vertical mullions (window frames)
-                        const mullionMat = new THREE.MeshLambertMaterial({ color: 0x333333 });
-                        for (let i = 0; i < 4; i++) {
-                            const angle = (i / 4) * Math.PI * 2;
-                            for (let j = -2; j <= 2; j++) {
-                                const mullion = new THREE.Mesh(new THREE.BoxGeometry(0.15, 30, 0.15), mullionMat);
-                                const mx = Math.cos(angle) * 7.6 + Math.sin(angle) * j * 3;
-                                const mz = Math.sin(angle) * 7.6 - Math.cos(angle) * j * 3;
-                                mullion.position.set(mx, 15, mz); g4.add(mullion);
-                            }
+                        // Vertical mullions (reduced from 20 to 8 - front face only)
+                        const mullionGeo = getBoxGeo(0.15, 30, 0.15);
+                        for (let j = -2; j <= 2; j++) {
+                            const mullion = new THREE.Mesh(mullionGeo, matCache.dark333);
+                            mullion.position.set(j * 3, 15, 7.6); g4.add(mullion);
                         }
-                        // Modern entrance plaza
-                        const plazaMat = new THREE.MeshLambertMaterial({ color: 0x555555 });
-                        const plaza = new THREE.Mesh(new THREE.BoxGeometry(20, 0.3, 8), plazaMat);
+                        const plaza = new THREE.Mesh(getBoxGeo(20, 0.3, 8), matCache.grey555);
                         plaza.position.set(0, 0.15, 11); g4.add(plaza);
-                        // Glass canopy entrance
-                        const canopyGlass = new THREE.MeshLambertMaterial({ color: 0x88ddee, transparent: true, opacity: 0.5 });
-                        const canopy4 = new THREE.Mesh(new THREE.BoxGeometry(8, 0.2, 5), canopyGlass);
+                        const canopy4 = new THREE.Mesh(getBoxGeo(8, 0.2, 5), matCache.canopyGlass);
                         canopy4.position.set(0, 4, 9); g4.add(canopy4);
-                        // Canopy supports
-                        const supportMat = new THREE.MeshLambertMaterial({ color: 0x888888 });
-                        [[-3, 6], [3, 6]].forEach(([sx, sz]) => {
-                            const support = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 4, 8), supportMat);
-                            support.position.set(sx, 2, sz + 5); g4.add(support);
-                        });
-                        // Revolving door entrance
-                        const doorFrame4 = new THREE.Mesh(new THREE.BoxGeometry(5, 4, 1), new THREE.MeshLambertMaterial({ color: 0x333333 }));
-                        doorFrame4.position.set(0, 2, 7.5); g4.add(doorFrame4);
-                        const revDoor4 = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 3, 16), new THREE.MeshLambertMaterial({ color: 0xaaddee, transparent: true, opacity: 0.4 }));
-                        revDoor4.position.set(0, 1.5, 8); g4.add(revDoor4);
-                        // Spire/antenna at top
-                        const spireMat = new THREE.MeshLambertMaterial({ color: 0x888888 });
-                        const spire = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.5, 8, 8), spireMat);
-                        spire.position.set(0, 34, 0);
-                        g4.add(spire);
-                        // Aircraft warning lights (multiple)
-                        const lightMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-                        const warnLight = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), lightMat);
-                        warnLight.position.set(0, 38, 0);
-                        g4.add(warnLight);
-                        // Corner warning lights
-                        [[7, 30, 7], [-7, 30, 7], [7, 30, -7], [-7, 30, -7]].forEach(([lx, ly, lz]) => {
-                            const cornerLight = new THREE.Mesh(new THREE.SphereGeometry(0.2, 6, 6), lightMat);
-                            cornerLight.position.set(lx, ly, lz); g4.add(cornerLight);
-                        });
-                        // Crown detail with LED strip effect
-                        const crownMat = new THREE.MeshLambertMaterial({ color: 0x333333 });
-                        const crown = new THREE.Mesh(new THREE.BoxGeometry(16, 1, 16), crownMat);
-                        crown.position.set(0, 30.5, 0);
-                        g4.add(crown);
-                        // LED accent strip
-                        const ledMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
-                        const ledStrip = new THREE.Mesh(new THREE.BoxGeometry(16.2, 0.15, 16.2), ledMat);
+                        const spire = new THREE.Mesh(getCylGeo(0.3, 0.5, 8, 6), matCache.grey888);
+                        spire.position.set(0, 34, 0); g4.add(spire);
+                        const warnLight = new THREE.Mesh(getSphGeo(0.3, 6, 6), matCache.redLight);
+                        warnLight.position.set(0, 38, 0); g4.add(warnLight);
+                        const crown = new THREE.Mesh(getBoxGeo(16, 1, 16), matCache.dark333);
+                        crown.position.set(0, 30.5, 0); g4.add(crown);
+                        const ledStrip = new THREE.Mesh(getBoxGeo(16.2, 0.15, 16.2), matCache.cyanLed);
                         ledStrip.position.set(0, 30, 0); g4.add(ledStrip);
-                        // Flagpoles
-                        const poleMat = new THREE.MeshLambertMaterial({ color: 0xcccccc });
-                        const flagMat = new THREE.MeshLambertMaterial({ color: 0xff0000, side: THREE.DoubleSide });
-                        [-8, 8].forEach(px => {
-                            const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 6, 6), poleMat);
-                            pole.position.set(px, 3, 11); g4.add(pole);
-                            const flag = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1), flagMat);
-                            flag.position.set(px + 0.8, 5, 11); g4.add(flag);
-                        });
                     }
                     root.add(g4);
 
-                    // 5. Factory Building with Chimneys and industrial details
+                    // 5. Factory Building
                     const g5 = new THREE.Group();
                     {
-                        // Random factory colors - various industrial shades
                         const factoryColors = [0xCD5C5C, 0x8B4513, 0xA0522D, 0xBC8F8F, 0x696969, 0x708090, 0x8B0000, 0xB22222];
                         const factoryMat = new THREE.MeshLambertMaterial({ color: factoryColors[Math.floor(Math.random() * factoryColors.length)] });
-                        const chimneyMat = new THREE.MeshLambertMaterial({ color: 0x333333 }); // Dark grey/black
-                        // Main factory body with slight texture variation
-                        const factoryBody = new THREE.Mesh(new THREE.BoxGeometry(18, 14, 18), factoryMat);
+                        const factoryBody = new THREE.Mesh(getBoxGeo(18, 14, 18), factoryMat);
                         factoryBody.position.y = 7; factoryBody.castShadow = true; g5.add(factoryBody);
-                        // Secondary building/warehouse attached
-                        const warehouseMat = new THREE.MeshLambertMaterial({ color: 0x666666 });
-                        const warehouse = new THREE.Mesh(new THREE.BoxGeometry(10, 10, 12), warehouseMat);
-                        warehouse.position.set(-14, 5, 0); warehouse.castShadow = true; g5.add(warehouse);
-                        // Warehouse roof (curved/arched effect using half cylinder)
-                        const roofMat = new THREE.MeshLambertMaterial({ color: 0x555555 });
-                        const roof = new THREE.Mesh(new THREE.CylinderGeometry(5, 5, 12, 16, 1, false, 0, Math.PI), roofMat);
-                        roof.rotation.z = Math.PI / 2;
-                        roof.rotation.y = Math.PI / 2;
+                        const warehouse = new THREE.Mesh(getBoxGeo(10, 10, 12), matCache.grey666);
+                        warehouse.position.set(-14, 5, 0); g5.add(warehouse);
+                        const roof = new THREE.Mesh(new THREE.CylinderGeometry(5, 5, 12, 8, 1, false, 0, Math.PI), matCache.grey555);
+                        roof.rotation.z = Math.PI / 2; roof.rotation.y = Math.PI / 2;
                         roof.position.set(-14, 10, 0); g5.add(roof);
-                        // Two tall chimneys with rings
-                        const chimney1 = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.8, 14, 12), chimneyMat);
-                        chimney1.position.set(-5, 19, -5); chimney1.castShadow = true; g5.add(chimney1);
-                        const chimney2 = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.8, 14, 12), chimneyMat);
-                        chimney2.position.set(5, 19, -5); chimney2.castShadow = true; g5.add(chimney2);
-                        // Third smaller chimney
-                        const chimney3 = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.2, 10, 12), chimneyMat);
-                        chimney3.position.set(0, 17, -5); chimney3.castShadow = true; g5.add(chimney3);
-                        // Cooling tower
-                        const coolingMat = new THREE.MeshLambertMaterial({ color: 0x777777 });
-                        const cooling = new THREE.Mesh(new THREE.CylinderGeometry(3, 4, 8, 16), coolingMat);
+                        const chimGeo = getCylGeo(1.5, 1.8, 14, 8);
+                        const chimney1 = new THREE.Mesh(chimGeo, matCache.chimneyDark);
+                        chimney1.position.set(-5, 19, -5); g5.add(chimney1);
+                        const chimney2 = new THREE.Mesh(chimGeo, matCache.chimneyDark);
+                        chimney2.position.set(5, 19, -5); g5.add(chimney2);
+                        const cooling = new THREE.Mesh(getCylGeo(3, 4, 8, 8), matCache.grey777);
                         cooling.position.set(6, 18, 4); g5.add(cooling);
-                        // Loading dock (larger)
-                        const dockMat = new THREE.MeshLambertMaterial({ color: 0x555555 });
-                        const dock = new THREE.Mesh(new THREE.BoxGeometry(12, 2, 5), dockMat);
+                        const dock = new THREE.Mesh(getBoxGeo(12, 2, 5), matCache.grey555);
                         dock.position.set(0, 1, 11.5); g5.add(dock);
-                        // Dock bumpers
-                        const bumperMat = new THREE.MeshLambertMaterial({ color: 0xffff00 });
-                        for (let i = 0; i < 3; i++) {
-                            const bumper = new THREE.Mesh(new THREE.BoxGeometry(0.3, 1.5, 0.5), bumperMat);
-                            bumper.position.set(-4 + i * 4, 0.75, 13.8); g5.add(bumper);
-                        }
                         // Roll-up doors (3 bays)
-                        const doorMat = new THREE.MeshLambertMaterial({ color: 0x666666 });
+                        const doorGeo5 = getBoxGeo(3, 4, 0.2);
                         for (let i = 0; i < 3; i++) {
-                            const door = new THREE.Mesh(new THREE.BoxGeometry(3, 4, 0.2), doorMat);
-                            door.position.set(-4 + i * 4, 4, 9.1); g5.add(door);
-                            // Door frames
-                            const frameMat = new THREE.MeshLambertMaterial({ color: 0x444444 });
-                            const frameL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 4.5, 0.3), frameMat);
-                            frameL.position.set(-4 + i * 4 - 1.6, 4.25, 9.1); g5.add(frameL);
-                            const frameR = new THREE.Mesh(new THREE.BoxGeometry(0.2, 4.5, 0.3), frameMat);
-                            frameR.position.set(-4 + i * 4 + 1.6, 4.25, 9.1); g5.add(frameR);
+                            const door5 = new THREE.Mesh(doorGeo5, matCache.grey666);
+                            door5.position.set(-4 + i * 4, 4, 9.1); g5.add(door5);
                         }
-                        // Small windows (industrial style)
-                        const winMat5 = new THREE.MeshLambertMaterial({ color: 0x88aacc });
-                        for (let i = 0; i < 5; i++) {
-                            const win = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2, 0.3), winMat5);
-                            win.position.set(-7 + i * 3.5, 10, 9.1); g5.add(win);
-                        }
-                        // Side windows on warehouse
+                        // Windows
+                        const winGeo5 = getBoxGeo(1.5, 2, 0.3);
                         for (let i = 0; i < 3; i++) {
-                            const sideWin = new THREE.Mesh(new THREE.BoxGeometry(0.3, 1.5, 2), winMat5);
-                            sideWin.position.set(-19.1, 6, -4 + i * 4); g5.add(sideWin);
+                            const win = new THREE.Mesh(winGeo5, matCache.winBlue);
+                            win.position.set(-3.5 + i * 3.5, 10, 9.1); g5.add(win);
                         }
-                        // Pipes on the side (complex pipe network)
-                        const pipeMat = new THREE.MeshLambertMaterial({ color: 0x888888 });
-                        const pipe1 = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 12, 8), pipeMat);
+                        // Pipes
+                        const pipe1 = new THREE.Mesh(getCylGeo(0.3, 0.3, 12, 6), matCache.grey888);
                         pipe1.position.set(9.2, 7, 0); g5.add(pipe1);
-                        const pipe2 = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 12, 8), pipeMat);
-                        pipe2.position.set(9.2, 7, 3); g5.add(pipe2);
-                        const pipe3 = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 8, 8), pipeMat);
-                        pipe3.rotation.z = Math.PI / 2;
-                        pipe3.position.set(5, 13, 0); g5.add(pipe3);
-                        // Horizontal pipe connecting chimneys
-                        const pipe4 = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 10, 8), pipeMat);
-                        pipe4.rotation.z = Math.PI / 2;
-                        pipe4.position.set(0, 16, -5); g5.add(pipe4);
-                        // Storage tanks
-                        const tankMat5 = new THREE.MeshLambertMaterial({ color: 0xaaaaaa });
-                        const tank1 = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 6, 12), tankMat5);
-                        tank1.position.set(-6, 3, -12); g5.add(tank1);
-                        const tank2 = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 6, 12), tankMat5);
-                        tank2.position.set(0, 3, -12); g5.add(tank2);
-                        // Tank labels
-                        const labelMat = new THREE.MeshLambertMaterial({ color: 0x0066cc });
-                        const label1 = new THREE.Mesh(new THREE.BoxGeometry(2, 1, 0.1), labelMat);
-                        label1.position.set(-6, 4, -10); g5.add(label1);
-                        // Crane/gantry on side
-                        const craneMat = new THREE.MeshLambertMaterial({ color: 0xffaa00 });
-                        const cranePost1 = new THREE.Mesh(new THREE.BoxGeometry(0.5, 12, 0.5), craneMat);
+                        // Crane
+                        const cranePostGeo = getBoxGeo(0.5, 12, 0.5);
+                        const cranePost1 = new THREE.Mesh(cranePostGeo, matCache.crane);
                         cranePost1.position.set(-10, 6, -8); g5.add(cranePost1);
-                        const cranePost2 = new THREE.Mesh(new THREE.BoxGeometry(0.5, 12, 0.5), craneMat);
+                        const cranePost2 = new THREE.Mesh(cranePostGeo, matCache.crane);
                         cranePost2.position.set(-10, 6, 8); g5.add(cranePost2);
-                        const craneBeam = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.5, 17), craneMat);
+                        const craneBeam = new THREE.Mesh(getBoxGeo(0.4, 0.5, 17), matCache.crane);
                         craneBeam.position.set(-10, 12, 0); g5.add(craneBeam);
-                        // Safety signage
-                        const signMat = new THREE.MeshLambertMaterial({ color: 0xffff00 });
-                        const sign = new THREE.Mesh(new THREE.BoxGeometry(2, 1.5, 0.1), signMat);
-                        sign.position.set(6, 3, 9.15); g5.add(sign);
                     }
                     root.add(g5);
-
-                    // Add window lights to buildings for night illumination
-                    const windowColors = [0xffeeaa, 0xffeedd, 0xffffcc, 0xffd700];
-                    // Add windows to house (g0)
-                    [[-2.5, 3.5, 4.2], [2.5, 3.5, 4.2]].forEach(([x, y, z]) => {
-                        const wl = createWindowLight(1.6, 1.6);
-                        wl.position.set(x, y, z);
-                        g0.add(wl);
-                        root.userData.windowLights.push(wl);
-                    });
-                    // Add windows to stepped tower (g1)
-                    for (let floor = 0; floor < 3; floor++) {
-                        const yPos = 3 + floor * 8;
-                        for (let side = 0; side < 4; side++) {
-                            if (Math.random() > 0.3) {
-                                const wl = createWindowLight(2, 1.5);
-                                const angle = (side / 4) * Math.PI * 2;
-                                const dist = 5.5 - floor * 0.8;
-                                wl.position.set(Math.sin(angle) * dist, yPos, Math.cos(angle) * dist);
-                                wl.rotation.y = angle;
-                                wl.material = wl.material.clone();
-                                wl.material.color.setHex(windowColors[Math.floor(Math.random() * windowColors.length)]);
-                                g1.add(wl);
-                                root.userData.windowLights.push(wl);
-                            }
-                        }
-                    }
-                    // Add windows to high-rise (g2)
-                    for (let floor = 1; floor < 9; floor++) {
-                        const yPos = floor * 5 + 2;
-                        for (let wx = -1; wx <= 1; wx++) {
-                            if (Math.random() > 0.25) {
-                                const wl = createWindowLight(2.5, 2);
-                                wl.position.set(wx * 3, yPos, 5.1);
-                                wl.material = wl.material.clone();
-                                wl.material.color.setHex(windowColors[Math.floor(Math.random() * windowColors.length)]);
-                                g2.add(wl);
-                                root.userData.windowLights.push(wl);
-                            }
-                        }
-                    }
-                    // Add windows to modern twin (g3)
-                    for (let floor = 0; floor < 6; floor++) {
-                        if (Math.random() > 0.3) {
-                            const wl = createWindowLight(1.5, 1.5);
-                            wl.position.set(-3, 8 + floor * 4, -0.4);
-                            wl.material = wl.material.clone();
-                            wl.material.color.setHex(windowColors[Math.floor(Math.random() * windowColors.length)]);
-                            g3.add(wl);
-                            root.userData.windowLights.push(wl);
-                        }
-                    }
-                    // Add windows to glass tower (g4)
-                    for (let floor = 1; floor < 10; floor++) {
-                        const yPos = floor * 3;
-                        for (let side = 0; side < 4; side++) {
-                            if (Math.random() > 0.4) {
-                                const wl = createWindowLight(3, 2);
-                                const angle = (side / 4) * Math.PI * 2;
-                                wl.position.set(Math.sin(angle) * 7.7, yPos, Math.cos(angle) * 7.7);
-                                wl.rotation.y = angle;
-                                wl.material = wl.material.clone();
-                                wl.material.color.setHex(windowColors[Math.floor(Math.random() * windowColors.length)]);
-                                g4.add(wl);
-                                root.userData.windowLights.push(wl);
-                            }
-                        }
-                    }
 
                     // Initialize: Hide all except 0
                     root.children.forEach(c => c.visible = false);
@@ -1336,6 +1207,9 @@
                     root.scale.set(1.2, 1.2, 1.2);
                     return root;
                 };
+                // ── Environment — Cloud, Bird, Lamp, Signs, Trees ─────
+
+                // createCloud(): Soft grouping of dodecahedrons.
                 const createCloud = () => {
                     const g = new THREE.Group();
                     const mat = new THREE.MeshLambertMaterial({ color: 0xeeeeee, transparent: true, opacity: 0.8 });
@@ -1348,147 +1222,53 @@
                     }
                     return g;
                 };
+
+                // createBird(): Simple low-poly bird with flapping wings.
                 const createBird = () => {
                     const g = new THREE.Group();
-                    // Random bird colors - realistic variety
-                    const birdColors = [
-                        { body: 0x2c2c2c, wing: 0x1a1a1a, belly: 0x4a4a4a }, // Crow
-                        { body: 0x8B4513, wing: 0x654321, belly: 0xD2B48C }, // Sparrow
-                        { body: 0x1e3a5f, wing: 0x0d1f33, belly: 0x87CEEB }, // Blue Jay
-                        { body: 0x8B0000, wing: 0x5c0000, belly: 0xCD5C5C }, // Cardinal
-                        { body: 0x556B2F, wing: 0x3d4f23, belly: 0x9ACD32 }, // Green bird
-                    ];
-                    const colors = birdColors[Math.floor(Math.random() * birdColors.length)];
-                    const bodyMat = new THREE.MeshLambertMaterial({ color: colors.body });
-                    const wingMat = new THREE.MeshLambertMaterial({ color: colors.wing });
-                    const bellyMat = new THREE.MeshLambertMaterial({ color: colors.belly });
-                    const beakMat = new THREE.MeshLambertMaterial({ color: 0xFFA500 });
-                    const eyeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
-
-                    // Body - elongated ellipsoid shape
-                    const body = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 6), bodyMat);
-                    body.scale.set(1, 0.7, 1.8);
-                    g.add(body);
-
-                    // Belly (lighter underside)
-                    const belly = new THREE.Mesh(new THREE.SphereGeometry(0.25, 8, 6), bellyMat);
-                    belly.scale.set(0.8, 0.5, 1.5);
-                    belly.position.set(0, -0.1, 0);
-                    g.add(belly);
-
+                    const colors = [0x2c2c2c, 0x8B4513, 0x1e3a5f, 0x8B0000, 0x556B2F];
+                    const col = colors[Math.floor(Math.random() * colors.length)];
+                    const bm = new THREE.MeshLambertMaterial({ color: col });
+                    // Body
+                    const body = new THREE.Mesh(new THREE.SphereGeometry(0.3, 6, 6), bm);
+                    body.scale.set(1, 0.7, 1.8); g.add(body);
                     // Head
-                    const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 6), bodyMat);
-                    head.position.set(0, 0.1, 0.45);
-                    g.add(head);
-
+                    const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 6, 6), bm);
+                    head.position.set(0, 0.1, 0.45); g.add(head);
                     // Beak
-                    const beak = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.2, 6), beakMat);
-                    beak.rotation.x = -Math.PI / 2;
-                    beak.position.set(0, 0.05, 0.65);
-                    g.add(beak);
-
-                    // Eyes
-                    const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 6), eyeMat);
-                    eyeL.position.set(0.1, 0.15, 0.55);
-                    g.add(eyeL);
-                    const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 6), eyeMat);
-                    eyeR.position.set(-0.1, 0.15, 0.55);
-                    g.add(eyeR);
-
-                    // Wings (will be animated)
-                    const wingShape = new THREE.Shape();
-                    wingShape.moveTo(0, 0);
-                    wingShape.lineTo(0.6, 0.1);
-                    wingShape.lineTo(0.7, 0);
-                    wingShape.lineTo(0.5, -0.15);
-                    wingShape.lineTo(0, -0.05);
-                    const wingGeo = new THREE.ShapeGeometry(wingShape);
-
-                    const wingL = new THREE.Mesh(wingGeo, wingMat);
-                    wingL.position.set(0.15, 0.1, 0);
-                    wingL.rotation.y = Math.PI / 2;
-                    g.add(wingL);
-                    g.userData.wingL = wingL;
-
-                    const wingR = new THREE.Mesh(wingGeo, wingMat);
-                    wingR.position.set(-0.15, 0.1, 0);
-                    wingR.rotation.y = -Math.PI / 2;
-                    wingR.scale.x = -1;
-                    g.add(wingR);
-                    g.userData.wingR = wingR;
-
-                    // Tail feathers
-                    const tailGeo = new THREE.BoxGeometry(0.15, 0.02, 0.3);
-                    const tail1 = new THREE.Mesh(tailGeo, wingMat);
-                    tail1.position.set(0, 0, -0.45);
-                    tail1.rotation.x = 0.2;
-                    g.add(tail1);
-                    const tail2 = new THREE.Mesh(tailGeo, wingMat);
-                    tail2.position.set(0.08, 0.02, -0.42);
-                    tail2.rotation.x = 0.2;
-                    tail2.rotation.z = 0.1;
-                    g.add(tail2);
-                    const tail3 = new THREE.Mesh(tailGeo, wingMat);
-                    tail3.position.set(-0.08, 0.02, -0.42);
-                    tail3.rotation.x = 0.2;
-                    tail3.rotation.z = -0.1;
-                    g.add(tail3);
-
-                    // Feet (simple)
-                    const footMat = new THREE.MeshLambertMaterial({ color: 0x444444 });
-                    const footL = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.15, 6), footMat);
-                    footL.position.set(0.08, -0.2, 0);
-                    g.add(footL);
-                    const footR = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.15, 6), footMat);
-                    footR.position.set(-0.08, -0.2, 0);
-                    g.add(footR);
-
+                    const beak = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.2, 4), new THREE.MeshLambertMaterial({ color: 0xFFA500 }));
+                    beak.rotation.x = -Math.PI / 2; beak.position.set(0, 0.05, 0.65); g.add(beak);
+                    // Wings
+                    const wg = new THREE.BoxGeometry(0.5, 0.05, 0.3);
+                    const wingL = new THREE.Mesh(wg, bm); wingL.position.set(0.4, 0.05, 0); g.add(wingL); g.userData.wingL = wingL;
+                    const wingR = new THREE.Mesh(wg, bm); wingR.position.set(-0.4, 0.05, 0); g.add(wingR); g.userData.wingR = wingR;
                     g.scale.set(2, 2, 2);
                     return g;
                 };
-                // Street Lamp with glowing light
+
+                // createStreetLamp(): Pole with arm and housing (daytime only, no glow).
                 const createStreetLamp = () => {
                     const g = new THREE.Group();
                     const poleMat = new THREE.MeshLambertMaterial({ color: 0x333333 });
-                    const lampMat = new THREE.MeshBasicMaterial({ color: 0xffff99 });
-
-                    // Main pole
                     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 8, 8), poleMat);
-                    pole.position.y = 4; pole.castShadow = true; g.add(pole);
-
-                    // Curved arm at top
+                    pole.position.y = 4; g.add(pole);
                     const arm = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 2), poleMat);
                     arm.position.set(0, 7.8, -0.8); arm.rotation.x = 0.3; g.add(arm);
-
-                    // Lamp housing
                     const housing = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.3, 0.6), poleMat);
                     housing.position.set(0, 7.6, -1.5); g.add(housing);
-
-                    // Glowing bulb
-                    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 8), lampMat);
-                    bulb.position.set(0, 7.4, -1.5); g.add(bulb);
-                    g.userData.bulb = bulb;
-
-                    // Point light for night illumination
-                    const light = new THREE.PointLight(0xffdd88, 0, 15);
-                    light.position.set(0, 7.4, -1.5);
-                    g.add(light);
-                    g.userData.light = light;
-
-                    // Base plate
                     const base = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.2, 0.8), poleMat);
                     base.position.y = 0.1; g.add(base);
-
                     return g;
                 };
-                // Road Sign
+
+                // createRoadSign(): Speed limit, warning triangle, or chevron arrow.
                 const createRoadSign = (type) => {
                     const g = new THREE.Group();
                     const poleMat = new THREE.MeshLambertMaterial({ color: 0x888888 });
 
                     // Pole
                     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 4, 8), poleMat);
-                    pole.position.y = 2; pole.castShadow = true; g.add(pole);
+                    pole.position.y = 2; g.add(pole);
 
                     if (type === 'speed') {
                         // Speed limit sign (circular)
@@ -1534,7 +1314,8 @@
                     }
                     return g;
                 };
-                // Road Barrier / Guardrail
+
+                // createGuardrail(): Metal rail with evenly-spaced posts.
                 const createGuardrail = (length) => {
                     const g = new THREE.Group();
                     const metalMat = new THREE.MeshLambertMaterial({ color: 0xaaaaaa });
@@ -1542,20 +1323,20 @@
 
                     // Main rail
                     const rail = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.4, length), metalMat);
-                    rail.position.y = 0.6; rail.castShadow = true; g.add(rail);
+                    rail.position.y = 0.6; g.add(rail);
 
                     // Posts
                     const numPosts = Math.floor(length / 3);
                     for (let i = 0; i <= numPosts; i++) {
                         const post = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.8, 0.15), postMat);
                         post.position.set(0, 0.4, -length / 2 + i * 3);
-                        post.castShadow = true;
                         g.add(post);
                     }
 
                     return g;
                 };
-                // Detailed road texture creator
+
+                // createRoadTexture(): Procedural asphalt texture with noise grain.
                 const createRoadTexture = () => {
                     const size = 512;
                     const canvas = document.createElement('canvas');
@@ -1581,7 +1362,9 @@
                     tex.repeat.set(2, 2);
                     return tex;
                 };
-                // Exhaust smoke particle
+
+                // ── Exhaust Particle System ───────────────────────────
+                // Exhaust smoke particles (semi-transparent spheres).
                 const exhaustParticles = [];
                 const exhaustMat = new THREE.MeshBasicMaterial({ color: 0x888888, transparent: true, opacity: 0.3 });
                 for (let i = 0; i < 40; i++) {
@@ -1605,86 +1388,60 @@
                         p.vz = 0.1 + Math.random() * 0.05;
                     }
                 };
-                // Puddle system for rain
-                const puddles = [];
-                const puddleMat = new THREE.MeshBasicMaterial({
-                    color: 0x446688,
-                    transparent: true,
-                    opacity: 0.4
-                });
-                for (let i = 0; i < 15; i++) {
-                    const size = 1 + Math.random() * 3;
-                    const puddle = new THREE.Mesh(
-                        new THREE.CircleGeometry(size, 12),
-                        puddleMat.clone()
-                    );
-                    puddle.rotation.x = -Math.PI / 2;
-                    puddle.position.set(
-                        (Math.random() - 0.5) * 25,
-                        0.03,
-                        -200 + Math.random() * 400
-                    );
-                    puddle.visible = false;
-                    scene.add(puddle);
-                    puddles.push(puddle);
-                }
-                // Splash particles when driving through puddles
-                const splashParticles = [];
-                const splashMat = new THREE.MeshBasicMaterial({ color: 0x6699bb, transparent: true, opacity: 0.6 });
-                for (let i = 0; i < 30; i++) {
-                    const splash = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), splashMat.clone());
-                    splash.visible = false;
-                    scene.add(splash);
-                    splashParticles.push({ mesh: splash, life: 0, active: false, vx: 0, vy: 0, vz: 0 });
-                }
-                const spawnSplash = (x, z) => {
-                    for (let i = 0; i < 8; i++) {
-                        const p = splashParticles.find(s => !s.active);
-                        if (p) {
-                            p.mesh.position.set(x + (Math.random() - 0.5) * 2, 0.2, z);
-                            p.mesh.visible = true;
-                            p.mesh.material.opacity = 0.6;
-                            p.active = true;
-                            p.life = 15 + Math.random() * 10;
-                            p.vx = (Math.random() - 0.5) * 0.3;
-                            p.vy = 0.15 + Math.random() * 0.1;
-                            p.vz = Math.random() * 0.1;
-                        }
-                    }
+
+                // ── Pre-cached Tree Materials & Geometries ─────────────
+                const treeLeaveMats = {
+                    pine: new THREE.MeshLambertMaterial({ color: 0x2d5a27 }),
+                    green1: new THREE.MeshLambertMaterial({ color: 0x228B22 }),
+                    green2: new THREE.MeshLambertMaterial({ color: 0x006400 }),
+                    green3: new THREE.MeshLambertMaterial({ color: 0x32CD32 }),
+                    pink: new THREE.MeshLambertMaterial({ color: 0xFFB7C5 }),
+                    hotpink: new THREE.MeshLambertMaterial({ color: 0xFF69B4 }),
+                    orange: new THREE.MeshLambertMaterial({ color: 0xFFA500 }),
+                    yellowTree: new THREE.MeshLambertMaterial({ color: 0xFFFF00 }),
                 };
+                const treeGeos = {
+                    trunkPine: getCylGeo(0.4, 0.6, 2, 6),
+                    trunkRound: getCylGeo(0.5, 0.7, 3, 6),
+                    trunkColor: getCylGeo(0.5, 0.7, 3.5, 6),
+                    cone1: new THREE.ConeGeometry(2.5, 3, 6),
+                    cone2: new THREE.ConeGeometry(1.8, 2.5, 6),
+                    cone3: new THREE.ConeGeometry(1.2, 2, 6),
+                    ico1: new THREE.IcosahedronGeometry(2.2, 0),
+                    ico2: new THREE.IcosahedronGeometry(1.5, 0),
+                    dodec: new THREE.DodecahedronGeometry(2.5),
+                };
+
+                // ── createTree() — Random tree variant ────────────────
+                // 30% Pine, 30% Round (green), 40% Colourful (pink/orange/yellow).
                 const createTree = () => {
                     const g = new THREE.Group();
                     const t = Math.random();
-                    const trunkMat = new THREE.MeshLambertMaterial({ color: 0x5C4033 });
-
                     if (t < 0.3) {
-                        // Pine Tree
-                        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.6, 2, 8), trunkMat);
-                        trunk.position.y = 1; trunk.castShadow = true; g.add(trunk);
-                        const leavesMat = new THREE.MeshLambertMaterial({ color: 0x2d5a27 });
-                        const l1 = new THREE.Mesh(new THREE.ConeGeometry(2.5, 3, 8), leavesMat); l1.position.y = 3; l1.castShadow = true; g.add(l1);
-                        const l2 = new THREE.Mesh(new THREE.ConeGeometry(1.8, 2.5, 8), leavesMat); l2.position.y = 4.5; l2.castShadow = true; g.add(l2);
-                        const l3 = new THREE.Mesh(new THREE.ConeGeometry(1.2, 2, 8), leavesMat); l3.position.y = 5.8; l3.castShadow = true; g.add(l3);
+                        const trunk = new THREE.Mesh(treeGeos.trunkPine, matCache.trunk);
+                        trunk.position.y = 1; g.add(trunk);
+                        const l1 = new THREE.Mesh(treeGeos.cone1, treeLeaveMats.pine); l1.position.y = 3; g.add(l1);
+                        const l2 = new THREE.Mesh(treeGeos.cone2, treeLeaveMats.pine); l2.position.y = 4.5; g.add(l2);
                     } else if (t < 0.6) {
-                        // Round Tree
-                        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.7, 3, 8), trunkMat);
-                        trunk.position.y = 1.5; trunk.castShadow = true; g.add(trunk);
-                        const col = [0x228B22, 0x006400, 0x32CD32][Math.floor(Math.random() * 3)];
-                        const leavesMat = new THREE.MeshLambertMaterial({ color: col });
-                        const main = new THREE.Mesh(new THREE.IcosahedronGeometry(2.2, 0), leavesMat); main.position.y = 4; main.castShadow = true; g.add(main);
-                        const sub1 = new THREE.Mesh(new THREE.IcosahedronGeometry(1.5, 0), leavesMat); sub1.position.set(1, 4.5, 0); g.add(sub1);
-                        const sub2 = new THREE.Mesh(new THREE.IcosahedronGeometry(1.5, 0), leavesMat); sub2.position.set(-1, 4.2, 0.8); g.add(sub2);
+                        const trunk = new THREE.Mesh(treeGeos.trunkRound, matCache.trunk);
+                        trunk.position.y = 1.5; g.add(trunk);
+                        const cols = [treeLeaveMats.green1, treeLeaveMats.green2, treeLeaveMats.green3];
+                        const lm = cols[Math.floor(Math.random() * 3)];
+                        const main = new THREE.Mesh(treeGeos.ico1, lm); main.position.y = 4; g.add(main);
+                        const sub1 = new THREE.Mesh(treeGeos.ico2, lm); sub1.position.set(1, 4.5, 0); g.add(sub1);
                     } else {
-                        // Colorful Tree
-                        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.7, 3.5, 8), trunkMat);
-                        trunk.position.y = 1.75; trunk.castShadow = true; g.add(trunk);
-                        const c = [0xFFB7C5, 0xFF69B4, 0xFFA500, 0xFFFF00][Math.floor(Math.random() * 4)];
-                        const leavesMat = new THREE.MeshLambertMaterial({ color: c });
-                        const l = new THREE.Mesh(new THREE.DodecahedronGeometry(2.5), leavesMat); l.position.y = 4.5; l.castShadow = true; g.add(l);
+                        const trunk = new THREE.Mesh(treeGeos.trunkColor, matCache.trunk);
+                        trunk.position.y = 1.75; g.add(trunk);
+                        const cols = [treeLeaveMats.pink, treeLeaveMats.hotpink, treeLeaveMats.orange, treeLeaveMats.yellowTree];
+                        const lm = cols[Math.floor(Math.random() * 4)];
+                        const l = new THREE.Mesh(treeGeos.dodec, lm); l.position.y = 4.5; g.add(l);
                     }
                     g.scale.set(1.3, 1.3, 1.3);
                     return g;
                 };
+
+                // ── createCar() — Traffic Vehicle Models ───────────────
+                // Types: 'sport', 'ambulance', 'van', 'truck', 'police', 'sedan'.
                 const createCar = (t, c) => {
                     const g = new THREE.Group();
                     const bm = new THREE.MeshLambertMaterial({ color: c });
@@ -1699,7 +1456,7 @@
 
                     // Wheels
                     const mw = (z) => {
-                        const wg = new THREE.CylinderGeometry(0.55, 0.55, 0.4, 16); wg.rotateZ(Math.PI / 2);
+                        const wg = new THREE.CylinderGeometry(0.55, 0.55, 0.4, 8); wg.rotateZ(Math.PI / 2);
                         [1.3, -1.3].forEach(x => {
                             const w = new THREE.Mesh(wg, tire); w.position.set(x, 0.55, z); w.castShadow = true; g.add(w);
                             const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.45, 8), gm); hub.rotateZ(Math.PI / 2); hub.position.set(x, 0.55, z); g.add(hub);
@@ -1711,39 +1468,21 @@
                     // Car Body - Model faces -Z (Front), +Z (Back)
 
                     if (t === 'sport') {
-                        mb(2.2, 0.7, 4.4, bm, 0, by, 0);
-                        mb(2.0, 0.6, 2.2, dm, 0, by + 0.5, -0.2); // Cabin
-                        mb(2.1, 0.1, 2.1, bm, 0, by + 0.81, -0.2); // Roof
-                        // Spoiler (Back +Z)
-                        mb(2.4, 0.1, 0.5, bm, 0, by + 0.8, 2.2);
-                        mb(0.2, 0.4, 0.1, bm, -0.8, by + 0.6, 2.2);
-                        mb(0.2, 0.4, 0.1, bm, 0.8, by + 0.6, 2.2);
-                        // Side mirrors
-                        mb(0.15, 0.1, 0.2, dm, -1.2, by + 0.55, -0.8);
-                        mb(0.15, 0.1, 0.2, dm, 1.2, by + 0.55, -0.8);
-                        // Exhaust pipes
-                        const exhaustMat = new THREE.MeshLambertMaterial({ color: 0x444444 });
-                        const ex1 = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.3, 8), exhaustMat);
-                        ex1.rotation.x = Math.PI / 2; ex1.position.set(-0.6, by - 0.1, 2.35); g.add(ex1);
-                        const ex2 = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.3, 8), exhaustMat);
-                        ex2.rotation.x = Math.PI / 2; ex2.position.set(0.6, by - 0.1, 2.35); g.add(ex2);
-                        // Hood vents
-                        mb(0.4, 0.08, 0.6, dm, -0.5, by + 0.38, -1.5);
-                        mb(0.4, 0.08, 0.6, dm, 0.5, by + 0.38, -1.5);
-                        // Front grille
-                        mb(1.6, 0.25, 0.05, gm, 0, by + 0.05, -2.22);
-                        // Antenna
-                        const antMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
-                        const ant = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.5, 6), antMat);
-                        ant.position.set(0.8, by + 1.1, 0.5); g.add(ant);
-                        // Lights
-                        [0.7, -0.7].forEach(x => {
-                            mb(0.4, 0.15, 0.1, lm, x, by + 0.1, -2.2); // Headlights (-Z)
-                            mb(0.4, 0.15, 0.1, rm, x, by + 0.2, 2.2); // Tail (+Z)
+                        // Cute toy car - chunky boxy body
+                        mb(2.6, 1.0, 4.5, bm, 0, by + 0.1, 0); // Main body - wide & tall
+                        mb(2.4, 0.2, 1.8, bm, 0, by + 0.6, -1.2); // Hood/bonnet slope
+                        // Cabin - big and boxy, sits toward back
+                        mb(2.3, 0.9, 2.2, dm, 0, by + 0.85, 0.4); // Windows (dark)
+                        mb(2.5, 0.15, 2.3, bm, 0, by + 1.3, 0.4); // Roof
+                        // Front bumper
+                        mb(2.6, 0.3, 0.15, bm, 0, by - 0.15, -2.3);
+                        // Rear bumper
+                        mb(2.6, 0.3, 0.15, bm, 0, by - 0.15, 2.3);
+                        // Big round headlights
+                        [0.85, -0.85].forEach(x => {
+                            mb(0.5, 0.45, 0.15, lm, x, by + 0.25, -2.3); // Headlights
+                            mb(0.45, 0.35, 0.15, rm, x, by + 0.3, 2.3); // Tail lights
                         });
-                        // Fog lights
-                        mb(0.15, 0.1, 0.05, lm, -0.9, by - 0.05, -2.22);
-                        mb(0.15, 0.1, 0.05, lm, 0.9, by - 0.05, -2.22);
                     } else if (t === 'ambulance') {
                         mb(2.4, 1.2, 4.6, wm, 0, by + 0.3, 0);
                         mb(2.2, 1.0, 1.5, dm, 0, by + 0.6, -1.6); // Front Window
@@ -1785,11 +1524,12 @@
                             mb(0.3, 0.25, 0.25, new THREE.MeshLambertMaterial({ color: 0x2196F3 }), 0.6, by + 1.15, -0.2);
                         }
                     }
-                    g.scale.set(t === 'sport' ? 2.2 : 1.8, t === 'sport' ? 2.2 : 1.8, t === 'sport' ? 2.2 : 1.8);
+                    g.scale.set(2.0, 2.0, 2.0);
                     return g;
                 };
 
-                // Separate motorcycle function to avoid any issues
+                // ── createMotorcycle() ──────────────────────────────
+                // Separate from createCar to avoid type-check complexity.
                 const createMotorcycle = (col) => {
                     const g = new THREE.Group();
                     const bm = new THREE.MeshLambertMaterial({ color: col });
@@ -1803,11 +1543,11 @@
                     };
 
                     // Wheels
-                    const wg = new THREE.CylinderGeometry(0.55, 0.55, 0.3, 16);
+                    const wg = new THREE.CylinderGeometry(0.55, 0.55, 0.3, 8);
                     wg.rotateZ(Math.PI / 2);
-                    const w1 = new THREE.Mesh(wg, tireMat); w1.position.set(0, 0.55, 1.2); w1.castShadow = true; g.add(w1);
-                    const w2 = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.3, 16).rotateZ(Math.PI / 2), tireMat);
-                    w2.position.set(0, 0.55, -1.2); w2.castShadow = true; g.add(w2);
+                    const w1 = new THREE.Mesh(wg, tireMat); w1.position.set(0, 0.55, 1.2); g.add(w1);
+                    const w2 = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.3, 8).rotateZ(Math.PI / 2), tireMat);
+                    w2.position.set(0, 0.55, -1.2); g.add(w2);
 
                     // Body
                     mb(0.5, 0.6, 1.8, bm, 0, 1.0, 0);
@@ -1823,17 +1563,14 @@
                     mb(0.2, 0.2, 0.5, shirt, 0.4, 1.8, -0.3);
                     mb(0.2, 0.2, 0.5, shirt, -0.4, 1.8, -0.3);
 
-                    g.scale.set(1.8, 1.8, 1.8);
+                    g.scale.set(2.0, 2.0, 2.0);
                     return g;
                 };
 
+                // ── Player Car Instance ───────────────────────────────
                 const playerCar = createCar('sport', 0xFF0055); scene.add(playerCar);
-                // Attach headlights to player car
-                playerCar.add(headlightL); playerCar.add(headlightR);
-                headlightL.target.position.set(-1, 0, -20); headlightR.target.position.set(1, 0, -20);
-                playerCar.add(headlightL.target); playerCar.add(headlightR.target);
 
-                // Dust/Smoke particle system
+                // ── Dust/Smoke Particle System ────────────────────────
                 const dustParticles = [];
                 const dustMat = new THREE.MeshBasicMaterial({ color: 0xcccccc, transparent: true, opacity: 0.6 });
                 const createDustParticle = () => {
@@ -1865,10 +1602,13 @@
                         }
                     }
                 };
-                // Removed static road/grass/markings - now dynamic in gridRows
-                const GRID_STEP = 15; const NUM_ROWS = 60; const START_Z = -350;
+
+                // ── Infinite Road Grid ───────────────────────────────
+                // NUM_ROWS of road segments are recycled in a ring buffer
+                // to create an endlessly scrolling road.
+                const GRID_STEP = 15; const NUM_ROWS = 35; const START_Z = -250;
                 const roadTex = createRoadTexture();
-                const roadMat = new THREE.MeshLambertMaterial({ map: roadTex });
+                const roadMat = new THREE.MeshLambertMaterial({ map: roadTex, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
                 const grassMat = new THREE.MeshLambertMaterial({ color: 0x2d5a27 });
                 const markMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
                 const curbMat = new THREE.MeshLambertMaterial({ color: 0x666666 });
@@ -1877,8 +1617,8 @@
                     const z = START_Z + (i * GRID_STEP);
                     const rowG = new THREE.Group(); rowG.position.z = z;
 
-                    // High Res Road (15 steps) + Overlap (17 size)
-                    const rSeg = new THREE.Mesh(new THREE.PlaneGeometry(30, 17), roadMat.clone());
+                    // High Res Road (15 steps) + Overlap (18 size)
+                    const rSeg = new THREE.Mesh(new THREE.PlaneGeometry(30, 18), roadMat.clone());
                     rSeg.rotation.x = -Math.PI / 2; rSeg.receiveShadow = true; rowG.add(rSeg);
 
                     // Road curbs (elevated edges)
@@ -1887,8 +1627,8 @@
                     const curbR = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.3, 17), curbMat);
                     curbR.position.set(15.25, 0.1, 0); rowG.add(curbR);
 
-                    const gL = new THREE.Mesh(new THREE.BoxGeometry(250, 1, 17), grassMat); gL.position.set(-136, -0.6, 0); rowG.add(gL);
-                    const gR = new THREE.Mesh(new THREE.BoxGeometry(250, 1, 17), grassMat); gR.position.set(136, -0.6, 0); rowG.add(gR);
+                    const gL = new THREE.Mesh(new THREE.BoxGeometry(250, 1, 18), grassMat); gL.position.set(-140, -0.6, 0); rowG.add(gL);
+                    const gR = new THREE.Mesh(new THREE.BoxGeometry(250, 1, 18), grassMat); gR.position.set(140, -0.6, 0); rowG.add(gR);
 
                     // Markings - 1 long one or 2 short ones? With step 15, let's do 1 centered marking strip
                     // Or keep the dotted look. 15 length is short.
@@ -1903,22 +1643,18 @@
                     const edgeR = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.02, 17), markMat);
                     edgeR.position.set(14.5, 0.03, 0); rowG.add(edgeR);
 
-                    // Trees - inner (close to road) and outer (far from road)
-                    const tL = createTree(); tL.position.set(-24 + (Math.random() - 0.5) * 4, 0, (Math.random() - 0.5) * 6);
-                    const tR = createTree(); tR.position.set(24 + (Math.random() - 0.5) * 4, 0, (Math.random() - 0.5) * 6);
-                    const tOL = createTree(); tOL.position.set(-55 + (Math.random() - 0.5) * 8, 0, (Math.random() - 0.5) * 6);
-                    const tOR = createTree(); tOR.position.set(55 + (Math.random() - 0.5) * 8, 0, (Math.random() - 0.5) * 6);
+                    // Trees - inner (close to road), mid, and outer (far from road)
+                    const tL = createTree(); tL.position.set(-22 + (Math.random() - 0.5) * 4, 0, 0);
+                    const tR = createTree(); tR.position.set(22 + (Math.random() - 0.5) * 4, 0, 0);
+                    const tML = createTree(); tML.position.set(-38 + (Math.random() - 0.5) * 4, 0, 0);
+                    const tMR = createTree(); tMR.position.set(38 + (Math.random() - 0.5) * 4, 0, 0);
+                    const tOL = createTree(); tOL.position.set(-55 + (Math.random() - 0.5) * 6, 0, 0);
+                    const tOR = createTree(); tOR.position.set(55 + (Math.random() - 0.5) * 6, 0, 0);
                     // Buildings with randomized positions to prevent overlap
-                    const buildOffsetL = -45 - Math.random() * 20; // -45 to -65
-                    const buildOffsetR = 45 + Math.random() * 20;  // 45 to 65
-                    const bL = createMultiBuilding(); bL.position.set(buildOffsetL, 0, (Math.random() - 0.5) * 8); bL.rotation.y = Math.PI / 2 + (Math.random() - 0.5) * 0.3;
-                    const bR = createMultiBuilding(); bR.position.set(buildOffsetR, 0, (Math.random() - 0.5) * 8); bR.rotation.y = -Math.PI / 2 + (Math.random() - 0.5) * 0.3;
-                    // Track building windows for night lighting
-                    if (bL.userData.windowLights) gameStateRef.current.buildingWindows.push(...bL.userData.windowLights);
-                    if (bR.userData.windowLights) gameStateRef.current.buildingWindows.push(...bR.userData.windowLights);
-
-                    // Street lamps removed per user request
-                    let lampL = null, lampR = null;
+                    const buildOffsetL = -38 - Math.random() * 12; // -38 to -50
+                    const buildOffsetR = 38 + Math.random() * 12;  // 38 to 50
+                    const bL = createMultiBuilding(); bL.position.set(buildOffsetL, 0, 0); bL.rotation.y = Math.PI / 2;
+                    const bR = createMultiBuilding(); bR.position.set(buildOffsetR, 0, 0); bR.rotation.y = -Math.PI / 2;
 
                     // Guardrails (every 3rd row, alternating sides)
                     let guardL = null, guardR = null;
@@ -1952,19 +1688,20 @@
                         rowG.add(signR);
                     }
 
-                    rowG.add(tL, tR, tOL, tOR, bL, bR); scene.add(rowG);
+                    rowG.add(tL, tR, tML, tMR, tOL, tOR, bL, bR); scene.add(rowG);
                     const rowObj = {
                         mesh: rowG, z: z,
                         treeInnerL: tL, treeInnerR: tR,
+                        treeMidL: tML, treeMidR: tMR,
                         treeOuterL: tOL, treeOuterR: tOR,
                         buildL: bL, buildR: bR,
-                        lampL: lampL, lampR: lampR,
                         guardL: guardL, guardR: guardR,
                         signL: signL, signR: signR
                     };
                     updateRowVisuals(rowObj, true); gameStateRef.current.gridRows.push(rowObj);
                 }
-                // Clouds & Birds Init (reduced for performance)
+                // ── Clouds & Birds Init ──────────────────────────────
+                // Reduced count for performance.
                 for (let i = 0; i < 8; i++) {
                     const c = createCloud();
                     c.position.set((Math.random() - 0.5) * 200, 80 + Math.random() * 50, -300 + Math.random() * 600);
@@ -1978,148 +1715,85 @@
                     scene.add(b);
                     gameStateRef.current.birds.push({ mesh: b, speed: 0.2 + Math.random() * 0.3, phase: Math.random() * Math.PI * 2 });
                 }
+                // ── Keyboard Input Handling ──────────────────────────
                 const keys = {}; const onKey = (e) => keys[e.key] = e.type === 'keydown';
                 window.addEventListener('keydown', onKey); window.addEventListener('keyup', onKey);
                 camera.position.set(0, 12, 40); let speed = 0; let spawnTimer = 0;
-                let currentRot = 0, currentTilt = 0; const LANES = [-10, 0, 10]; let steerCurrent = 0; let steerTarget = 0;
+                let currentRot = 0, currentTilt = 0;
+                const LANES = [-10, 0, 10];   // Left, Centre, Right lane X positions
+                let steerCurrent = 0; let steerTarget = 0;
 
-                let roadCurve = 0; let targetCurve = 0; let curveTimer = 0;
+                const cachedGearDisplay = document.getElementById('gear-indicator');
+                const cachedBpmDisplay = document.getElementById('bpm-tracker');
 
-                // Classic Arcade "Visual Curve" - DISABLED per user request
-                const getCurveOffset = (z) => {
-                    return 0; // Winding removed
-                };
+                // ═════════════════════════════════════════════════
+                //  MAIN GAME LOOP (requestAnimationFrame)
+                // ═════════════════════════════════════════════════
                 const animate = () => {
                     requestAnimationFrame(animate);
-                    // Show/hide HUD elements based on game state
-                    const gearDisplay = document.getElementById('gear-indicator');
-                    const bpmDisplay = document.getElementById('bpm-tracker');
                     const isPlaying = gameStateRef.current.gameStarted && !gameStateRef.current.isGameOver && !gameStateRef.current.isPaused;
-                    if (gearDisplay) gearDisplay.style.display = isPlaying ? 'block' : 'none';
-                    if (bpmDisplay) bpmDisplay.style.display = isPlaying ? 'block' : 'none';
+                    if (cachedGearDisplay) cachedGearDisplay.style.display = isPlaying ? 'block' : 'none';
+                    if (cachedBpmDisplay) cachedBpmDisplay.style.display = isPlaying ? 'block' : 'none';
 
-                    if (!gameStateRef.current.gameStarted || gameStateRef.current.isGameOver || gameStateRef.current.isPaused) { if (gameStateRef.current.gameStarted) renderer.render(scene, camera); return; }
+                    // ── Pause / Game-Over guard ──
+                    if (!gameStateRef.current.gameStarted || gameStateRef.current.isGameOver || gameStateRef.current.isPaused) { renderer.render(scene, camera); return; }
+
+                    // ── Reset state after restart ──
+                    if (gameStateRef.current.needsReset) { gameStateRef.current.needsReset = false; speed = 0; steerCurrent = 0; steerTarget = 0; currentRot = 0; currentTilt = 0; spawnTimer = 0; playerCar.position.x = 0; playerCar.rotation.y = 0; playerCar.rotation.z = 0; camera.position.x = 0; }
+
+                    // ── Track play time & distance ──
                     if (speed > 0) { gameStateRef.current.movingTime += 0.016; gameStateRef.current.totalDistance += speed; }
 
                     // === VISUAL EFFECTS UPDATE ===
-                    // Time progression: 1 game hour = 30 real seconds
-                    // Night Mode Disabled
-                    const hour = 12;
-
-                    // Update sky, fog, and lighting based on time
-                    const skyCol = getSkyColor(hour);
-                    const fogCol = getFogColor(hour);
-                    scene.fog.color.copy(fogCol);
-                    // Ambient light: dimmer at night
-                    lightsRef.ambient.intensity = isNight(hour) ? 0.35 : 0.6;
-                    lightsRef.ambient.color.copy(isNight(hour) ? new THREE.Color(0x5566cc) : new THREE.Color(0xffffff));
-                    // Directional light: sun position and intensity
-                    const sunAngle = ((hour - 6) / 12) * Math.PI; // 6am = sunrise, 18 = sunset
-                    if (hour >= 6 && hour < 19) {
-                        lightsRef.directional.intensity = 1.2;
-                        lightsRef.directional.position.set(Math.cos(sunAngle) * 100, Math.sin(sunAngle) * 150 + 20, 50);
-                    } else {
-                        lightsRef.directional.intensity = 0.3; // Moonlight
-                    }
-                    // Headlights: on at night
-                    const headlightIntensity = isNight(hour) ? 2 : 0;
-                    headlightL.intensity = headlightIntensity;
-                    headlightR.intensity = headlightIntensity;
-
-                    // Street lamp updates removed (lamps disabled)
-
-                    // Update building window lights based on time
-                    const windowOpacity = isNight(hour) ? 0.85 : 0;
-                    gameStateRef.current.buildingWindows.forEach(win => {
-                        if (win && win.material) {
-                            win.material.opacity = windowOpacity;
-                        }
-                    });
-
                     // Speed lines effect
                     updateSpeedLines(speed);
-                    // Time display
-                    updateTimeDisplay(hour);
-
-                    // Gear indicator removed
-
-                    // Rain logic removed per user request
-                    // Puddle and splash logic also removed
 
 
 
 
 
-                    // Animate spark particles
-                    gameStateRef.current.sparkParticles.forEach(p => {
-                        if (p.active) {
-                            p.life--;
-                            p.mesh.position.x += p.vx;
-                            p.mesh.position.y += p.vy;
-                            p.mesh.position.z += p.vz + speed;
-                            p.vy -= 0.015; // gravity
-                            if (p.life <= 0 || p.mesh.position.y < 0) {
-                                p.active = false;
-                                p.mesh.visible = false;
-                            }
-                        }
-                    });
-                    // Animate Clouds & Birds
-                    gameStateRef.current.clouds.forEach(c => {
-                        c.mesh.position.z += c.speed + (speed * 0.5); // Move with world slowly
+                    // Animate all particles (sparks, dust, exhaust) in one loop pattern
+                    const sparks = gameStateRef.current.sparkParticles;
+                    for (let i = 0; i < sparks.length; i++) {
+                        const p = sparks[i]; if (!p.active) continue;
+                        p.life--; p.mesh.position.x += p.vx; p.mesh.position.y += p.vy; p.mesh.position.z += p.vz + speed; p.vy -= 0.015;
+                        if (p.life <= 0 || p.mesh.position.y < 0) { p.active = false; p.mesh.visible = false; }
+                    }
+                    for (let i = 0; i < dustParticles.length; i++) {
+                        const p = dustParticles[i]; if (!p.active) continue;
+                        p.life--; p.mesh.position.x += p.vx; p.mesh.position.y += p.vy; p.mesh.position.z += speed * 0.5;
+                        p.mesh.scale.multiplyScalar(1.02); p.mesh.material.opacity *= 0.95;
+                        if (p.life <= 0 || p.mesh.material.opacity < 0.05) { p.active = false; p.mesh.visible = false; }
+                    }
+                    for (let i = 0; i < exhaustParticles.length; i++) {
+                        const p = exhaustParticles[i]; if (!p.active) continue;
+                        p.life--; p.mesh.position.x += p.vx; p.mesh.position.y += p.vy; p.mesh.position.z += p.vz + speed;
+                        p.mesh.scale.multiplyScalar(1.03); p.mesh.material.opacity *= 0.95;
+                        if (p.life <= 0 || p.mesh.material.opacity < 0.02) { p.active = false; p.mesh.visible = false; }
+                    }
+                    // Clouds & birds
+                    const gs = gameStateRef.current;
+                    for (let i = 0; i < gs.clouds.length; i++) {
+                        const c = gs.clouds[i]; c.mesh.position.z += c.speed + (speed * 0.5);
                         if (c.mesh.position.z > 100) c.mesh.position.z = -400;
-                    });
-                    gameStateRef.current.birds.forEach(b => {
-                        b.mesh.position.x += b.speed;
-                        b.mesh.position.y += Math.sin(gameStateRef.current.movingTime * 5 + b.phase) * 0.05;
+                    }
+                    for (let i = 0; i < gs.birds.length; i++) {
+                        const b = gs.birds[i]; b.mesh.position.x += b.speed;
+                        b.mesh.position.y += Math.sin(gs.movingTime * 5 + b.phase) * 0.05;
                         b.mesh.position.z += speed * 0.8;
-                        // Animate wings flapping
-                        if (b.mesh.userData.wingL && b.mesh.userData.wingR) {
-                            const flapAngle = Math.sin(gameStateRef.current.movingTime * 15 + b.phase) * 0.6;
-                            b.mesh.userData.wingL.rotation.x = flapAngle;
-                            b.mesh.userData.wingR.rotation.x = flapAngle;
+                        if (b.mesh.userData.wingL) {
+                            const flapAngle = Math.sin(gs.movingTime * 15 + b.phase) * 0.6;
+                            b.mesh.userData.wingL.rotation.x = flapAngle; b.mesh.userData.wingR.rotation.x = flapAngle;
                         }
                         if (b.mesh.position.x > 150) b.mesh.position.x = -150;
                         if (b.mesh.position.z > 100) b.mesh.position.z = -300;
-                    });
-                    // Animate dust particles
-                    dustParticles.forEach(p => {
-                        if (p.active) {
-                            p.life--;
-                            p.mesh.position.x += p.vx;
-                            p.mesh.position.y += p.vy;
-                            p.mesh.position.z += speed * 0.5;
-                            p.mesh.scale.multiplyScalar(1.02);
-                            p.mesh.material.opacity *= 0.95;
-                            if (p.life <= 0 || p.mesh.material.opacity < 0.05) {
-                                p.active = false;
-                                p.mesh.visible = false;
-                            }
-                        }
-                    });
-                    // Spawn dust when moving
-                    if (speed > 0.3 && Math.random() > 0.7) {
-                        spawnDust(playerCar.position.x, playerCar.position.z, speed);
                     }
-                    // Animate exhaust particles
-                    exhaustParticles.forEach(p => {
-                        if (p.active) {
-                            p.life--;
-                            p.mesh.position.x += p.vx;
-                            p.mesh.position.y += p.vy;
-                            p.mesh.position.z += p.vz + speed;
-                            p.mesh.scale.multiplyScalar(1.03);
-                            p.mesh.material.opacity *= 0.95;
-                            if (p.life <= 0 || p.mesh.material.opacity < 0.02) {
-                                p.active = false;
-                                p.mesh.visible = false;
-                            }
-                        }
-                    });
-                    // Spawn exhaust from player car when moving
-                    if (speed > 0.2 && Math.random() > 0.6) {
-                        spawnExhaust(playerCar.position.x, 0.5, playerCar.position.z + 4);
-                    }
+                    // Spawn dust & exhaust
+                    if (speed > 0.3 && Math.random() > 0.7) spawnDust(playerCar.position.x, playerCar.position.z, speed);
+                    if (speed > 0.2 && Math.random() > 0.6) spawnExhaust(playerCar.position.x, 0.5, playerCar.position.z + 4);
+                    // ── Difficulty Scaling ──────────────────────────
+                    // Progressive mode: difficulty ramps with score.
+                    // Fixed modes: constant difficulty parameters.
                     const t = gameStateRef.current.movingTime; const diffMode = gameStateRef.current.difficulty;
                     const currentScore = gameStateRef.current.score;
                     let laneSwitchProb = 0, spawnRate = 80, laneChangeDistance = 80;
@@ -2141,6 +1815,8 @@
                             laneSwitchProb = 0.015; spawnRate = 45; laneChangeDistance = 140;
                         }
                     } else { if (diffMode === 'Medium') { laneSwitchProb = 0.002; spawnRate = 60; laneChangeDistance = 100; } else if (diffMode === 'Hard') { laneSwitchProb = 0.008; spawnRate = 55; laneChangeDistance = 120; } }
+
+                    // ── Throttle Input (BLE encoder or keyboard) ────────
                     let bikeSpeed = throttleBtRef.current.throttle;
                     const keyboardActive = (keys['w'] || keys['ArrowUp']);
                     if (keyboardActive) {
@@ -2151,51 +1827,37 @@
                         speed *= 0.995;
                         if (speed < 0.005) speed = 0;
                     }
+
+                    // ── Steering Input (BLE tilt or keyboard) ───────────
                     steerTarget = 0; const tiltValue = btRef.current.tilt;
                     if (keys['a'] || keys['ArrowLeft']) { steerTarget = -0.3; } else if (keys['d'] || keys['ArrowRight']) { steerTarget = 0.3; } else if (tiltValue <= -2.8) { steerTarget = -0.3; } else if (tiltValue >= 2.8) { steerTarget = 0.3; }
                     const STEER_SMOOTH = 0.15; steerCurrent += (steerTarget - steerCurrent) * STEER_SMOOTH; if (Math.abs(steerCurrent) < 0.02) steerCurrent = 0;
                     if ((playerCar.position.x > -13 && steerCurrent < 0) || (playerCar.position.x < 13 && steerCurrent > 0)) { playerCar.position.x += steerCurrent; }
                     playerCar.position.x = Math.max(-13, Math.min(13, playerCar.position.x));
+
+                    // ── Car Visual Tilt & Camera Follow ─────────────────
                     const tr = -steerCurrent * 0.3; const tt = -steerCurrent * 0.15; currentRot += (tr - currentRot) * 0.1; currentTilt += (tt - currentTilt) * 0.1; playerCar.rotation.y = currentRot; playerCar.rotation.z = currentTilt;
                     camera.position.x = playerCar.position.x * 0.6; camera.lookAt(playerCar.position.x * 0.3, 2, -50);
+
+                    // ── Road Scrolling & Rural/Urban Cycle ───────────────
                     if (speed > 0) {
                         gameStateRef.current.score += speed;
                         setScore(Math.floor(gameStateRef.current.score));
-                        setScore(Math.floor(gameStateRef.current.score));
 
-                        // Classic Curve Logic (Smoothed)
-                        if (speed > 0.4) {
-                            curveTimer += 0.016;
-                            if (curveTimer > 4.0) { // Every 4 seconds
-                                targetCurve = (Math.random() - 0.5) * 1.5; // New curve
-                                curveTimer = 0;
-                            }
-                        }
-                        // Very slow interpolation for "Heavy/Natural" feel
-                        roadCurve += (targetCurve - roadCurve) * 0.003;
-
-                        const isRural = Math.floor(gameStateRef.current.totalDistance / 400) % 2 === 0;
-                        let minZ = 10000; gameStateRef.current.gridRows.forEach(r => minZ = Math.min(minZ, r.z));
-                        gameStateRef.current.gridRows.forEach(row => {
+                        const cyclePos = gameStateRef.current.totalDistance % 1400;
+                        const isRural = cyclePos < 600;
+                        const rows = gameStateRef.current.gridRows;
+                        let minZ = 10000;
+                        for (let i = 0; i < rows.length; i++) minZ = Math.min(minZ, rows[i].z);
+                        for (let i = 0; i < rows.length; i++) {
+                            const row = rows[i];
                             row.z += speed;
-                            if (row.z > 80) {
-                                row.z = minZ - GRID_STEP; minZ = row.z; updateRowVisuals(row, isRural);
-                            }
+                            if (row.z > 80) { row.z = minZ - GRID_STEP; minZ = row.z; updateRowVisuals(row, isRural); }
                             row.mesh.position.z = row.z;
-
-                            // Calculate Curve Position & Tangent Rotation
-                            const xCurrent = getCurveOffset(row.z);
-                            const xNext = getCurveOffset(row.z + GRID_STEP); // Look ahead
-
-                            row.mesh.position.x = xCurrent;
-
-                            // Rotate segment to point towards the next segment
-                            // atan2(dx, dz) gives the angle.
-                            const dx = xNext - xCurrent;
-                            const angle = Math.atan2(dx, GRID_STEP);
-                            row.mesh.rotation.y = angle;
-                        });
+                        }
                     }
+
+                    // ── Traffic Spawning ───────────────────────────────
                     const trafficSpeed = 0.6 + speed; spawnTimer += trafficSpeed;
                     if (spawnTimer > spawnRate) {
                         spawnTimer = 0; const r = Math.random(); let type = 'sedan'; let col = 0x555555;
@@ -2214,8 +1876,10 @@
                         gameStateRef.current.opponents.push({ mesh: c, laneIdx: laneIdx, logicX: logicX }); // Added logicX
 
                         // Initial position calc
-                        c.position.set(logicX + getCurveOffset(-250), 0, -250);
+                        c.position.set(logicX, 0, -250);
                     }
+
+                    // ── Traffic Movement, Lane Switching & Collision ──────
                     const ops = gameStateRef.current.opponents;
                     for (let i = ops.length - 1; i >= 0; i--) {
                         const opp = ops[i];
@@ -2239,14 +1903,12 @@
                         }
 
                         // Final Position = LogicX + CurveOffset
-                        opp.mesh.position.x = opp.logicX + getCurveOffset(opp.mesh.position.z);
+                        opp.mesh.position.x = opp.logicX;
 
-                        // Rotation adjustment for curve? Optional, but visual only.
-                        // Ideally: opp.mesh.rotation.y -= roadCurve * 0.1;
 
                         const distanceZ = Math.abs(opp.mesh.position.z - playerCar.position.z);
                         const distanceX = Math.abs(opp.mesh.position.x - playerCar.position.x); // Hitbox uses visual X which is correct
-                        if (distanceZ < 8 && distanceX < 4.5 && !opp.hitCooldown) {
+                        if (distanceZ < 8 && distanceX < 5 && !opp.hitCooldown) {
                             console.log("💥 HIT!");
                             playCrashSound();
                             hidePlayerCar(playerCar); // Blink the player car
@@ -2279,11 +1941,18 @@
                     renderer.render(scene, camera);
                 };
                 animate();
+
+                // ── Window Resize Handler ────────────────────────────
                 const handleResize = () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); };
                 window.addEventListener('resize', handleResize);
                 return () => { window.removeEventListener('resize', handleResize); window.removeEventListener('keydown', onKey); window.removeEventListener('keyup', onKey); if (mountRef.current) mountRef.current.innerHTML = ''; };
             }, []);
+
+            // ── Audio System ──────────────────────────────────────
+            // initAudio: Create/resume the Web Audio context.
             const initAudio = () => { if (!audioCtxRef.current) { audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)(); } if (audioCtxRef.current.state === 'suspended') { audioCtxRef.current.resume(); } };
+
+            // playCrashSound: Warm triangle-wave thud + soft secondary tone + noise texture.
             const playCrashSound = () => {
                 if (!audioCtxRef.current) return;
                 const ctx = audioCtxRef.current;
@@ -2342,6 +2011,8 @@
                 noiseGain.connect(ctx.destination);
                 noise.start();
             };
+
+            // startMusic: Randomly picks a track; on end, switches to boss music.
             const startMusic = () => {
                 const musicTracks = ['sounds/music.mp3', 'sounds/elderlysong1.mp3', 'sounds/elderlysong2.mp3'];
                 const randomTrack = musicTracks[Math.floor(Math.random() * musicTracks.length)];
@@ -2362,12 +2033,16 @@
                 musicRef.current.currentTime = 0;
                 musicRef.current.play().catch(e => console.log("Audio play failed (user interaction needed?):", e));
             };
+
+            // stopMusic: Pause and reset the music audio element.
             const stopMusic = () => {
                 if (musicRef.current) {
                     musicRef.current.pause();
                     musicRef.current.currentTime = 0;
                 }
             };
+
+            // ── Game Start / Restart Handlers ──────────────────────
             const onStartGame = () => { initAudio(); startMusic(); setGameStarted(true); gameStateRef.current.gameStarted = true; gameStateRef.current.isPaused = false; };
             const onPlayAgain = () => {
                 triggerRestart();
@@ -2379,6 +2054,10 @@
                 }
                 startMusic();
             };
+
+            // ─────────────────────────────────────────────────
+            //  JSX Render
+            // ─────────────────────────────────────────────────
             return (
                 <div style={{ width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden' }}>
                     <div ref={mountRef} style={{ width: '100%', height: '100%' }} />
@@ -2446,16 +2125,17 @@
                             <div className="menu-opt" style={{ background: '#E91E63', marginTop: '5px' }} onClick={() => { if (musicRef.current) { musicRef.current.src = 'sounds/boss.mp3'; musicRef.current.play(); } }}>🎶 Boss Music</div>
                         </div>
                         <div className="menu-opt" style={{ background: '#2196F3', marginTop: 'auto' }} onClick={toggleMenu}>{t('resume')}</div>
+                        <div className="menu-opt" style={{ background: '#f44336', marginTop: '8px' }} onClick={() => { setGameStarted(false); setGameOver(false); setScore(0); setLives(3); setNewRecord(false); setMenuOpen(false); const ref = gameStateRef.current; ref.isGameOver = false; ref.isPaused = false; ref.gameStarted = false; ref.score = 0; ref.lives = 3; ref.movingTime = 0; ref.totalDistance = 0; ref.needsReset = true; ref.opponents.forEach(o => { if (o.mesh && o.mesh.parent) o.mesh.parent.remove(o.mesh); }); ref.opponents = []; for (let i = 0; i < ref.gridRows.length; i++) { ref.gridRows[i].z = -350 + (i * 15); ref.gridRows[i].mesh.position.z = ref.gridRows[i].z; ref.gridRows[i].mesh.position.x = 0; ref.gridRows[i].mesh.rotation.y = 0; updateRowVisuals(ref.gridRows[i], true); } stopMusic(); }}>{t('mainMenu')}</div>
                     </div>
                     {
                         !gameStarted && (<div id="overlayScreen"> <h1 style={{ fontSize: '80px', margin: 0, color: '#4CAF50', textShadow: '4px 4px 0 #000' }}>{t('title')}</h1> <p style={{ marginTop: '20px', fontSize: '18px' }}>{t('highScore')}: {highScore}</p> <button className="reset-score-btn" onClick={resetHighScore}>{t('resetScore')}</button>
 
-                            <button className={`bt-btn ${btConnected ? 'connected' : btConnecting ? 'connecting' : ''}`} onClick={!btConnected && !btConnecting ? connectBluetooth : null} disabled={btConnecting}> {btConnected ? `✅ ${t('pairSteering')} ${t('paired')}` : btConnecting ? `🔄 ${t('connecting')}` : `📡 ${t('pairSteering')}`} </button>
-                            <button className={`bt-btn ${thBtConnected ? 'connected' : thBtConnecting ? 'connecting' : ''}`} onClick={!thBtConnected && !thBtConnecting ? connectThrottleBluetooth : null} disabled={thBtConnecting}> {thBtConnected ? `✅ ${t('pairThrottle')} ${t('paired')}` : thBtConnecting ? `🔄 ${t('connecting')}` : `🌀 ${t('pairThrottle')}`} </button>
+                            <button className={`bt-btn ${btConnected ? 'connected' : btConnecting ? 'connecting' : ''}`} onClick={!btConnected && !btConnecting ? connectBluetooth : null} disabled={btConnecting}> {btConnected ? `✅ ${t('pairSteering')} ${t('paired')}` : btConnecting ? `🔄 ${t('connecting')}` : `${t('pairSteering')}`} </button>
+                            <button className={`bt-btn ${thBtConnected ? 'connected' : thBtConnecting ? 'connecting' : ''}`} onClick={!thBtConnected && !thBtConnecting ? connectThrottleBluetooth : null} disabled={thBtConnecting}> {thBtConnected ? `✅ ${t('pairThrottle')} ${t('paired')}` : thBtConnecting ? `🔄 ${t('connecting')}` : `${t('pairThrottle')}`} </button>
                             <button className="big-btn" onClick={onStartGame}>{t('startEngine')}</button>
-                            <div style={{ marginTop: '15px' }}><select value={language} onChange={(e) => changeLanguage(e.target.value)} style={{ padding: '8px 16px', fontSize: '14px', borderRadius: '4px', border: 'none', background: '#333', color: 'white', cursor: 'pointer' }}><option value="en">English</option><option value="zh">中文</option></select></div> </div>)
+                            <div style={{ marginTop: '15px' }}><select value={language} onChange={(e) => changeLanguage(e.target.value)} style={{ padding: '10px 20px', fontSize: '16px', borderRadius: '8px', border: '2px solid #4CAF50', background: 'rgba(0, 0, 0, 0.7)', color: 'white', cursor: 'pointer', fontWeight: 'bold' }}><option value="en">English</option><option value="zh">中文</option></select></div> </div>)
                     }
-                    {gameOver && (<div id="overlayScreen"> <h1 style={{ color: '#ff4444', fontSize: '80px', margin: 0 }}>{t('crashed')}</h1> <p style={{ fontSize: '32px' }}>{t('score')}: {score}</p> {newRecord && <div style={{ background: '#FFD700', color: 'black', padding: '10px 20px', borderRadius: '5px', fontWeight: 'bold', fontSize: '20px', marginBottom: '20px' }}>🏆 {t('newRecord')} 🏆</div>} <p style={{ fontSize: '18px', color: '#aaa' }}>{t('pressRestart')}</p> <button className="big-btn" onClick={onPlayAgain}>{t('playAgain')}</button> <div style={{ marginTop: '15px' }}> <button className="restart-btn" onClick={() => { setGameStarted(false); setGameOver(false); setScore(0); setLives(3); setNewRecord(false); setMenuOpen(false); const ref = gameStateRef.current; ref.isGameOver = false; ref.isPaused = false; ref.gameStarted = false; ref.score = 0; ref.lives = 3; ref.movingTime = 0; ref.totalDistance = 0; ref.opponents.forEach(o => { if (o.mesh && o.mesh.parent) o.mesh.parent.remove(o.mesh); }); ref.opponents = []; for (let i = 0; i < ref.gridRows.length; i++) { ref.gridRows[i].z = -350 + (i * 15); ref.gridRows[i].mesh.position.z = ref.gridRows[i].z; ref.gridRows[i].mesh.position.x = 0; ref.gridRows[i].mesh.rotation.y = 0; updateRowVisuals(ref.gridRows[i], true); } stopMusic(); }}>{t('mainMenu')}</button> </div> </div>)}
+                    {gameOver && (<div id="overlayScreen"> <h1 style={{ color: '#ff4444', fontSize: '80px', margin: 0 }}>{t('crashed')}</h1> <p style={{ fontSize: '32px' }}>{t('score')}: {score}</p> {newRecord && <div style={{ background: '#FFD700', color: 'black', padding: '10px 20px', borderRadius: '5px', fontWeight: 'bold', fontSize: '20px', marginBottom: '20px' }}>🏆 {t('newRecord')} 🏆</div>} <p style={{ fontSize: '18px', color: '#aaa' }}>{t('pressRestart')}</p> <button className="big-btn" onClick={onPlayAgain}>{t('playAgain')}</button> <div style={{ marginTop: '15px' }}> <button className="restart-btn" onClick={() => { setGameStarted(false); setGameOver(false); setScore(0); setLives(3); setNewRecord(false); setMenuOpen(false); const ref = gameStateRef.current; ref.isGameOver = false; ref.isPaused = false; ref.gameStarted = false; ref.score = 0; ref.lives = 3; ref.movingTime = 0; ref.totalDistance = 0; ref.needsReset = true; ref.opponents.forEach(o => { if (o.mesh && o.mesh.parent) o.mesh.parent.remove(o.mesh); }); ref.opponents = []; for (let i = 0; i < ref.gridRows.length; i++) { ref.gridRows[i].z = -350 + (i * 15); ref.gridRows[i].mesh.position.z = ref.gridRows[i].z; ref.gridRows[i].mesh.position.x = 0; ref.gridRows[i].mesh.rotation.y = 0; updateRowVisuals(ref.gridRows[i], true); } stopMusic(); }}>{t('mainMenu')}</button> </div> </div>)}
 
                 </div >
             );
