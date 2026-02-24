@@ -2012,26 +2012,22 @@
                 noise.start();
             };
 
-            // startMusic: Randomly picks a track; on end, switches to boss music.
+            // startMusic: Randomly picks a track; on end, picks another random track.
             const startMusic = () => {
-                const musicTracks = ['sounds/music.mp3', 'sounds/elderlysong1.mp3', 'sounds/elderlysong2.mp3'];
-                const randomTrack = musicTracks[Math.floor(Math.random() * musicTracks.length)];
+                const musicTracks = ['Game Songs/Arcade_Music.mp3', 'Game Songs/Tian_Mimi.mp3', 'Game Songs/Rasa_Sayang_Hey.mp3', 'Game Songs/Cool_Music.mp3'];
+                const playRandom = () => {
+                    const randomTrack = musicTracks[Math.floor(Math.random() * musicTracks.length)];
+                    musicRef.current.src = randomTrack;
+                    musicRef.current.volume = volumeRef.current;
+                    musicRef.current.currentTime = 0;
+                    musicRef.current.play().catch(e => console.log("Audio play failed:", e));
+                };
                 if (!musicRef.current) {
                     musicRef.current = new Audio();
-                    // When first track ends, switch to boss music
-                    musicRef.current.addEventListener('ended', () => {
-                        musicRef.current.src = 'sounds/boss.mp3';
-                        musicRef.current.loop = true; // Boss music loops
-                        musicRef.current.volume = volumeRef.current;
-                        musicRef.current.play().catch(e => console.log("Boss music failed:", e));
-                    });
+                    // When a track ends, pick another random one
+                    musicRef.current.addEventListener('ended', playRandom);
                 }
-                // Randomly select from available tracks
-                musicRef.current.src = randomTrack;
-                musicRef.current.loop = false; // Don't loop initial track
-                musicRef.current.volume = volumeRef.current;
-                musicRef.current.currentTime = 0;
-                musicRef.current.play().catch(e => console.log("Audio play failed (user interaction needed?):", e));
+                playRandom();
             };
 
             // stopMusic: Pause and reset the music audio element.
@@ -2119,10 +2115,10 @@
 
                         <div style={{ marginBottom: '8px' }}>
                             <h3 style={{ fontSize: '14px', color: '#aaa', marginTop: 0, marginBottom: '5px' }}>🎵 Music</h3>
-                            <div className="menu-opt" style={{ background: '#E91E63' }} onClick={() => { if (musicRef.current) { musicRef.current.src = 'sounds/music.mp3'; musicRef.current.play(); } }}>🎶 Original Track</div>
-                            <div className="menu-opt" style={{ background: '#E91E63', marginTop: '5px' }} onClick={() => { if (musicRef.current) { musicRef.current.src = 'sounds/elderlysong1.mp3'; musicRef.current.play(); } }}>🎶 Elderly Song 1</div>
-                            <div className="menu-opt" style={{ background: '#E91E63', marginTop: '5px' }} onClick={() => { if (musicRef.current) { musicRef.current.src = 'sounds/elderlysong2.mp3'; musicRef.current.play(); } }}>🎶 Elderly Song 2</div>
-                            <div className="menu-opt" style={{ background: '#E91E63', marginTop: '5px' }} onClick={() => { if (musicRef.current) { musicRef.current.src = 'sounds/boss.mp3'; musicRef.current.play(); } }}>🎶 Boss Music</div>
+                            <div className="menu-opt" style={{ background: '#E91E63' }} onClick={() => { if (musicRef.current) { musicRef.current.src = 'Game Songs/Arcade_Music.mp3'; musicRef.current.play(); } }}>🎶 Arcade music</div>
+                            <div className="menu-opt" style={{ background: '#E91E63', marginTop: '5px' }} onClick={() => { if (musicRef.current) { musicRef.current.src = 'Game Songs/Tian_Mimi.mp3'; musicRef.current.play(); } }}>🎶 Tian Mimi</div>
+                            <div className="menu-opt" style={{ background: '#E91E63', marginTop: '5px' }} onClick={() => { if (musicRef.current) { musicRef.current.src = 'Game Songs/Rasa_Sayang_Hey.mp3'; musicRef.current.play(); } }}>🎶 Rasa Sayang Hey</div>
+                            <div className="menu-opt" style={{ background: '#E91E63', marginTop: '5px' }} onClick={() => { if (musicRef.current) { musicRef.current.src = 'Game Songs/Cool_Music.mp3'; musicRef.current.play(); } }}>🎶 Cool music</div>
                         </div>
                         <div className="menu-opt" style={{ background: '#2196F3', marginTop: 'auto' }} onClick={toggleMenu}>{t('resume')}</div>
                         <div className="menu-opt" style={{ background: '#f44336', marginTop: '8px' }} onClick={() => { setGameStarted(false); setGameOver(false); setScore(0); setLives(3); setNewRecord(false); setMenuOpen(false); const ref = gameStateRef.current; ref.isGameOver = false; ref.isPaused = false; ref.gameStarted = false; ref.score = 0; ref.lives = 3; ref.movingTime = 0; ref.totalDistance = 0; ref.needsReset = true; ref.opponents.forEach(o => { if (o.mesh && o.mesh.parent) o.mesh.parent.remove(o.mesh); }); ref.opponents = []; for (let i = 0; i < ref.gridRows.length; i++) { ref.gridRows[i].z = -350 + (i * 15); ref.gridRows[i].mesh.position.z = ref.gridRows[i].z; ref.gridRows[i].mesh.position.x = 0; ref.gridRows[i].mesh.rotation.y = 0; updateRowVisuals(ref.gridRows[i], true); } stopMusic(); }}>{t('mainMenu')}</div>
